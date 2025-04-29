@@ -1,7 +1,7 @@
 // src/sendMessage.mjs
 import { getClient } from "../../matrix/client.mjs";
 
-async function sendMessage(roomId, message, messageType = "m.text", logDetails = false) {
+async function sendMessage(room, message, messageType = "m.text", logDetails = false) {
     const client = await getClient();
 
     try {
@@ -18,18 +18,19 @@ async function sendMessage(roomId, message, messageType = "m.text", logDetails =
             });
         }
 
-        // Verify room exists
-        const room = client.getRoom(roomId);
+
         if (!room) {
-            throw new Error(`Room ${roomId} not found or not joined`);
+            throw new Error(`Room not found or not joined`);
         }
+
         if (logDetails) {
 
-            console.log(`Sending message to room ${room.name || roomId}...`);
+            console.log(`Sending message to room ${room.name || room.roomId}...`);
+
         }
 
         // Send the message
-        const eventId = await client.sendMessage(roomId, {
+        const eventId = await client.sendMessage(room.roomId, {
             msgtype: messageType,
             body: message
         });

@@ -1,36 +1,23 @@
-import { getClient } from "../../matrix/client.mjs"
+import { clientProxy } from "../../matrix/client.mjs"
 
 async function listRooms() {
-    const client = await getClient();
+
+    const client = clientProxy;
 
     try {
-        // If client isn't syncing yet, wait for sync
-        if (!client.isInitialSyncComplete()) {
-            await new Promise((resolve, reject) => {
-                client.once('sync', (state, prevState, res) => {
-                    if (state === 'PREPARED' || state === 'SYNCING') {
-                        resolve();
-                    }
-                });
-                client.once('error', reject);
-                client.startClient();
-            });
-        }
 
-        const rooms = client.getRooms();
+        const rooms = await client.listRooms();
 
         console.log(`\n=== Your Rooms (${rooms.length}) ===\n`);
 
         rooms.forEach((room, index) => {
-            const roomName = room.name || "Unnamed Room";
-            const memberCount = room.getJoinedMembers().length;
-            const lastEvent = room.timeline[room.timeline.length - 1];
-            const lastMessage = lastEvent?.getContent()?.body || "No messages yet";
+
+            const {roomId ,roomName, memberCount, lastMessage, lastEvent} = room;
 
             console.log(`${index + 1}. ${roomName}`);
-            console.log(`   Room ID: ${room.roomId}`);
+            console.log(`   Room ID: ${roomId}`);
             console.log(`   Members: ${memberCount}`);
-            console.log(`   Last Activity: ${new Date(lastEvent?.getDate()).toLocaleString()}`);
+            console.log(`   Last Activity: ${new Date(lastEvent).toLocaleString()}`);
             console.log(`   Preview: "${lastMessage.substring(0, 60)}${lastMessage.length > 60 ? '...' : ''}"`);
             console.log('─────────────────────────────────────────');
         });

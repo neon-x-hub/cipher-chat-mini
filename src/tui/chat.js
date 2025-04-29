@@ -109,7 +109,7 @@ function initTUI(roomId, roomName, room) {
 
         if (text.trim()) {
             try {
-                await sendMessage(roomId, text);
+                await sendMessage(room, text);
                 messageList.pushLine(`You: ${text}`);
             } catch (error) {
                 messageList.pushLine(`SYSTEM ~ Error: ${error.message}`);

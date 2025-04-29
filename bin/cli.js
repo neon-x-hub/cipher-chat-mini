@@ -56,7 +56,7 @@ room.command('join')
 
 
             // Start the TUI
-            initTUI(result.roomId, result.roomName , result.room);
+            initTUI(result.roomId, result.roomName, result.room);
 
         } catch (error) {
             console.error('❌ Failed to join room:', error.message);
@@ -105,13 +105,40 @@ room.command('list')
 
         try {
             await listRooms();
+            process.exit(0);
         } catch (err) {
             console.error('Error:', err.message);
         }
     });
 
+// Daemon management commands
+const daemon = new Command('daemon')
+    .description('Daemon management commands');
+
+daemon.command('start')
+    .description('Start the daemon')
+    .action(async () => {
+        // Dynamically import the startDaemon function
+        const { MatrixDaemon } = await import('../src/daemon/service.mjs');
+        const daemon = new MatrixDaemon();
+        console.log('Starting daemon...');
+        try {
+            daemon.start();
+        } catch (error) {
+            console.error('❌ Daemon failed to start:', error.message);
+            process.exit(1);
+        }
+
+    });
+
 // Add the commands to the main program
 program.addCommand(auth);
 program.addCommand(room);
+program.addCommand(daemon);
+program
+    .version('1.0.0')
+    .description('Matrix CLI Tool')
+    .option('-d, --debug', 'Enable debug mode', false)
+    .option('-v, --verbose', 'Enable verbose output', false);
 
 program.parse();

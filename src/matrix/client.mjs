@@ -1,79 +1,152 @@
-import * as sdk from "matrix-js-sdk";
-import { logger as Logger } from "matrix-js-sdk/lib/logger.js";
+import * as sdk from 'matrix-js-sdk';
+import { MatrixCommands } from './commands.mjs';
+import { daemonClient, DaemonClient } from '../daemon/client.mjs';
+import config from '../state/config.js';
 
-import config from "../state/config.js";
+/**
+ * * MatrixClientProxy class to handle direct and daemon commands.
+ * * * @class MatrixClientProxy
+ * * @description This class acts as a proxy to either the direct Matrix client or the daemon client based on the configuration.
+ * * * @property {MatrixCommands} directCommands - Instance of the MatrixCommands class for direct commands.
+ * * @property {string} mode - The mode of operation, either 'daemon' or 'direct'.
+ * * * @method getCommands - Returns the appropriate commands instance based on the mode.
+ * * @method execute - Executes a command based on the action and parameters provided.
+ */
+export class MatrixClientProxy {
+    constructor() {
+        this.directCommands = null;
 
-// Disable ALL matrix-js-sdk logging// Completely replace the logger with a no-op implementation
-const noop = () => { };
-Logger.error = noop;
-Logger.warn = noop;
-Logger.info = noop;
-Logger.debug = noop;
-Logger.trace = noop;
+        console.log("MatrixClientProxy initialized with mode:", config.useDaemon ? 'daemon' : 'direct');
 
-// ⚡ SILENCE ALL MATRIX LOGS (including debug/trace)
-Logger.setLevel(Logger.levels.SILENT); // No more logs!
-
-
-let client = null;
-let initializing = null; // prevent double initialization
-
-async function getClient() {
-    if (client) {
-        return client; // Already ready
+        this._mode = config.useDaemon ? 'daemon' : 'direct';
     }
 
-    if (initializing) {
-        return initializing; // Wait if already initializing
-    }
+    /**
+     * Initializes a direct Matrix client instance.
+     *
+     * @async
+     * @private
+     * @returns {Promise<MatrixClient>} - A promise that resolves with the initialized Matrix client instance.
+     * @throws {Error} - Throws an error if the client fails to initialize.
+     *
+     * @description
+     * This function creates a Matrix client using the provided configuration parameters.
+     * It sets up an error handler for client errors and starts the client with lazy loading of members.
+     * The client is considered initialized when it reaches the 'PREPARED' sync state.
+     */
 
-    initializing = (async () => {
+    async _createDirectClient() {
+        const client = sdk.createClient({
+            baseUrl: config.homeserverUrl,
+            userId: config.userId,
+            accessToken: config.accessToken,
+            deviceId: config.deviceId,
+            timelineSupport: true,
+        });
 
+        client.on('error', (error) => {
+            console.error('Matrix client error:', error);
+        });
 
-        if (!config || !config.homeserverUrl || !config.accessToken) {
-            throw new Error("Matrix client config is missing. Please login first.");
+        try {
+            await new Promise((resolve, reject) => {
+                client.once('sync', (state) => {
+                    if (state === 'PREPARED') {
+                        resolve();
+                    }
+                });
+
+                client.once('error', reject);
+                client.startClient({
+                    lazyLoadMembers: true,
+                });
+            });
+        } catch (error) {
+            console.error('Failed to initialize Matrix client:', error);
+            throw new Error('Client initialization failed');
         }
 
-        console.log("Initializing Matrix client...");
-
-
-        client = sdk.createClient({
-            baseUrl: config.homeserverUrl,
-            accessToken: config.accessToken,
-            userId: config.userId,
-            logger: null
-        });
-
-        // Wait for sync if not started yet
-        await new Promise((resolve, reject) => {
-            client.once('sync', (state) => {
-                if (state === 'PREPARED') {
-                    console.log("Client initialized successfully and synced.");
-                    resolve();  // Resolve when client is prepared
-                } else {
-                    console.log(`Client sync state: ${state}`);
-                }
-            });
-            client.once('error', (error) => {
-                console.error("Client initialization failed:", error);
-                reject(error);  // Reject if there's an error in sync
-            });
-
-            client.startClient();  // Starts the sync process
-        });
-
         return client;
-    })();
-
-    return initializing;
-}
-
-function resetClient() {
-    if (client) {
-        client.stopClient();
     }
-    client = null;
-    initializing = null;
+
+
+    /**
+     * Retrieves the appropriate commands instance based on the current mode.
+     *
+     * @async
+     * @returns {Promise<MatrixCommands|DaemonClient>} - A promise that resolves with either the daemon client or direct commands instance.
+     *
+     * @description
+     * If the mode is 'daemon', it connects to the daemon client and returns it.
+     * Otherwise, it initializes a direct Matrix client and returns a new instance of MatrixCommands.
+     * The function ensures the direct commands are initialized only once.
+     */
+
+    async getCommands() {
+        if (this.mode === 'daemon') {
+            return daemonClient;
+        }
+
+        if (!this.directCommands) {
+            const client = await this._createDirectClient();
+            this.directCommands = new MatrixCommands(client);
+        }
+        return this.directCommands;
+    }
+
+    /**
+     * Executes a command based on the action and parameters provided.
+     *
+     * @async
+     * @param {string} action - The action to execute.
+     * @param {Object} [params={}] - The parameters to pass to the action.
+     * @returns {Promise<*>} - A promise that resolves with the result of the executed action.
+     *
+     * @description
+     * Retrieves the appropriate commands instance based on the current mode and executes the specified action with the given parameters.
+     */
+    async execute(action, params = {}) {
+
+        console.log(`Executing action: ${action} with params:`, params);
+
+        const commands = await this.getCommands();
+
+        const method = commands[action];
+        if (typeof method !== 'function') {
+            throw new Error(`Unknown command: ${action}`);
+        }
+
+        return method(params);
+
+    }
+
+    /**
+     * Retrieves the current mode of operation.
+     *
+     * @returns {string} - The mode of operation, either 'daemon' or 'direct', based on the configuration.
+     */
+
+    get mode() {
+        return config.useDaemon ? 'daemon' : 'direct';
+    }
+
+    /**
+     * Sets the mode of operation.
+     *
+     * @param {"daemon" | "direct"} value - The mode of operation, either 'daemon' or 'direct'.
+     * @description
+     * Sets the mode of operation, which determines whether to use the daemon client or direct Matrix client.
+     * If the value is 'daemon', the daemon client is used; otherwise the direct Matrix client is used.
+     */
+    set mode(value) {
+        this._mode = value;
+    }
+
 }
 
-export { getClient, resetClient };
+export const clientProxy = new Proxy(new MatrixClientProxy(), {
+    get(target, prop) {
+        if (prop in target) return target[prop];
+        return (params = {}) => target.execute(prop, params);
+    }
+});
