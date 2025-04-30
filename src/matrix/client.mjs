@@ -107,8 +107,6 @@ export class MatrixClientProxy {
      */
     async execute(action, params = {}) {
 
-        console.log(`Executing action: ${action} with params:`, params);
-
         const commands = await this.getCommands();
 
         const method = commands[action];

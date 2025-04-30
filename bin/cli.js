@@ -44,19 +44,24 @@ room.command('join')
         try {
             console.log(`Attempting to join room ${roomIdentifier}...`);
 
+            const room = { roomId: roomIdentifier };
+
             const { joinRoom } = await import('../src/cli/room/join.mjs');
-            const result = await joinRoom(roomIdentifier);
+            const result = await joinRoom(room);
+
+            console.log(JSON.stringify(result, null, 2));
+
 
             console.log(`\n✅ Successfully joined room:`);
+            console.log(`   ID: ${result.roomId}`);
             console.log(`   Name: ${result.roomName}`);
             console.log(`   Alias: ${result.canonicalAlias || 'None'}`);
-            console.log(`   ID: ${result.roomId}`);
-            console.log(`   Members: ${result.room.getJoinedMembers().length}`);
-            console.log(`   Type: ${result.room.getType() || 'Regular chat'}\n`);
+            console.log(`   Members: ${result.memberCount}`);
+            console.log(`   Type: ${result.roomType}\n`);
 
 
             // Start the TUI
-            initTUI(result.roomId, result.roomName, result.room);
+            initTUI(result);
 
         } catch (error) {
             console.error('❌ Failed to join room:', error.message);

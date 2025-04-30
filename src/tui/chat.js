@@ -1,10 +1,10 @@
 const blessed = require('neo-blessed');
 
 
-function initTUI(roomId, roomName, room) {
+function initTUI(room) {
     const screen = blessed.screen({
         smartCSR: true,
-        title: `Chat Room: ${roomName}`,
+        title: `Chat Room: ${room.roomName}`,
     });
 
     const messageList = blessed.box({
@@ -109,7 +109,12 @@ function initTUI(roomId, roomName, room) {
 
         if (text.trim()) {
             try {
-                await sendMessage(room, text);
+                const message = {
+                    type: 'm.text',
+                    body: text,
+                };
+
+                await sendMessage(room, message);
                 messageList.pushLine(`You: ${text}`);
             } catch (error) {
                 messageList.pushLine(`SYSTEM ~ Error: ${error.message}`);
@@ -123,7 +128,7 @@ function initTUI(roomId, roomName, room) {
 
     // Initial focus
     inputBar.focus();
-    messageList.pushLine(`You joined room: ${roomName} (${roomId})`);
+    messageList.pushLine(`You joined room: ${room.roomName} (${room.roomId})`);
     screen.render();
 
     return { screen, messageList, inputBar };

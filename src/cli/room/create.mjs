@@ -1,21 +1,10 @@
-import { getClient } from "../../matrix/client.mjs";
+import { clientProxy } from "../../matrix/client.mjs";
 
 async function createRoom(roomName, isPrivate = true, topic = "") {
-    const client = await getClient();
+
 
     try {
-        // Ensure client is synced before creating a room
-        if (!client.isInitialSyncComplete()) {
-            await new Promise((resolve, reject) => {
-                client.once('sync', (state, prevState, res) => {
-                    if (state === 'PREPARED' || state === 'SYNCING') {
-                        resolve();
-                    }
-                });
-                client.once('error', reject);
-                client.startClient();
-            });
-        }
+        const client = clientProxy;
 
         // Room creation options
         const options = {
@@ -36,7 +25,6 @@ async function createRoom(roomName, isPrivate = true, topic = "") {
 
         console.log(`Creating room "${roomName}"...`);
         const { room_id } = await client.createRoom(options);
-
         console.log(`✅ Room created successfully!`);
         console.log(`🔗 Room ID: ${room_id}`);
         console.log(`🔐 ${isPrivate ? "Private" : "Public"} room`);

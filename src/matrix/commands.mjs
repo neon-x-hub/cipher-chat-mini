@@ -85,10 +85,47 @@ export class MatrixCommands {
      *
      * @async
      * @param {{roomId: string}} params - The parameters for joining the room.
-     * @returns {Promise<sdk.Room>} - A promise that resolves with the joined room's details.
+     * @returns {Promise<{{roomId: string, roomCurrentState: sdk.RoomState, roomName: string, canonicalAlias: string, memberCount: number, roomType: string}}>} - A promise that resolves with the joined room's details.
+     *
      */
     async joinRoom(params) {
-        return await this.client.joinRoom(params.roomId);
+
+        const room = this.client.getRoom(params.roomId);
+        if (!room) {
+            throw new Error(`Room with ID ${params.roomId} not found`);
+        }
+        // Join the room - this returns a Room object
+        await this.client.joinRoom(params.roomId);
+        // Wait for room state to fully load if needed
+        const roomName = room.name ||
+            room.currentState?.name ||
+            'Unnamed Room';
+        const canonicalAlias = room.canonicalAlias || 'None';
+        const roomId = room.roomId;
+        const memberCount = room.getJoinedMembers().length;
+        const roomType = room.getType() || 'Regular chat';
+
+        // Wait for room state to fully load if needed
+        if (!room.currentState) {
+            await new Promise(resolve => {
+                const onRoomState = () => {
+                    if (room.roomCurrentState) {
+                        this.client.off('RoomState.events', onRoomState);
+                        resolve();
+                    }
+                };
+                this.client.on('RoomState.events', onRoomState);
+            });
+
+    }
+
+        return {
+            roomId,
+            roomName,
+            canonicalAlias,
+            memberCount,
+            roomType,
+        };
     }
 
 

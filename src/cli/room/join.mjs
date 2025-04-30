@@ -1,52 +1,14 @@
-import { getClient } from "../../matrix/client.mjs";
+import { clientProxy } from "../../matrix/client.mjs";
 
-async function joinRoom(roomIdentifier) {
-    const client = await getClient();
+async function joinRoom(roomObj) {
+    const client = clientProxy;
 
     try {
-        // Ensure client is synced before joining
-        if (!client.isInitialSyncComplete()) {
-            await new Promise((resolve, reject) => {
-                client.once('sync', (state, prevState, res) => {
-                    if (state === 'PREPARED' || state === 'SYNCING') {
-                        resolve();
-                    }
-                });
-                client.once('error', reject);
-                client.startClient();
-            });
-        }
 
         // Join the room - this returns a Room object
-        const room = await client.joinRoom(roomIdentifier);
+        const room = await client.joinRoom(roomObj);
 
-        // Wait for room state to fully load if needed
-        if (!room.currentState) {
-            await new Promise(resolve => {
-                const onRoomState = () => {
-                    if (room.currentState) {
-                        client.off('RoomState.events', onRoomState);
-                        resolve();
-                    }
-                };
-                client.on('RoomState.events', onRoomState);
-            });
-        }
-
-        // Get room details
-        const roomName = room.name ||
-                       room.currentState?.name ||
-                       'Unnamed Room';
-        const canonicalAlias = room.canonicalAlias ||
-                              roomIdentifier;
-        const roomId = room.roomId;
-
-        return {
-            roomId,
-            roomName,
-            canonicalAlias,
-            room // Return full room object for additional functionality
-        };
+        return room;
 
     } catch (error) {
         // Handle specific Matrix errors
