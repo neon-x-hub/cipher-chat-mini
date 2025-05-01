@@ -128,17 +128,46 @@ const daemon = new Command('daemon')
 daemon.command('start')
     .description('Start the daemon')
     .action(async () => {
-        // Dynamically import the startDaemon function
-        const { MatrixDaemon } = await import('../src/daemon/service.mjs');
-        const daemon = new MatrixDaemon();
+        const { startDaemon } = await import('../src/cli/daemon/start.mjs');
         console.log('Starting daemon...');
         try {
-            daemon.start();
+            await startDaemon();
+            console.log('✅ Daemon started successfully!');
         } catch (error) {
             console.error('❌ Daemon failed to start:', error.message);
             process.exit(1);
         }
 
+    });
+
+daemon.command('disable')
+    .description('Disable the daemon')
+    .action(async () => {
+        const { setDaemon } = await import('../src/cli/daemon/set.mjs');
+        console.log('Disabling daemon...');
+        try {
+            await setDaemon(false);
+            console.log('✅ Daemon disabled successfully!');
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Failed to disable daemon:', error.message);
+            process.exit(1);
+        }
+    });
+
+daemon.command('enable')
+    .description('Enable the daemon')
+    .action(async () => {
+        const { setDaemon } = await import('../src/cli/daemon/set.mjs');
+        console.log('Enabeling daemon...');
+        try {
+            await setDaemon(true);
+            console.log('✅ Daemon enabled successfully!');
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Failed to enable daemon:', error.message);
+            process.exit(1);
+        }
     });
 
 // Add the commands to the main program
