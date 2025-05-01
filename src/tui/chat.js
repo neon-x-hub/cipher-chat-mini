@@ -1,7 +1,7 @@
 const blessed = require('neo-blessed');
 
 
-function initTUI(room) {
+async function initTUI(room) {
     const screen = blessed.screen({
         smartCSR: true,
         title: `Chat Room: ${room.roomName}`,
@@ -115,7 +115,6 @@ function initTUI(room) {
                 };
 
                 await sendMessage(room, message);
-                messageList.pushLine(`You: ${text}`);
             } catch (error) {
                 messageList.pushLine(`SYSTEM ~ Error: ${error.message}`);
             }
@@ -130,6 +129,11 @@ function initTUI(room) {
     inputBar.focus();
     messageList.pushLine(`You joined room: ${room.roomName} (${room.roomId})`);
     screen.render();
+
+    // Stream messages from the room
+    const { streamChatMessages } = await import('../cli/chat/stream.mjs');
+
+    await streamChatMessages(room, messageList, screen);
 
     return { screen, messageList, inputBar };
 }

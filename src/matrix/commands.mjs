@@ -117,7 +117,7 @@ export class MatrixCommands {
                 this.client.on('RoomState.events', onRoomState);
             });
 
-    }
+        }
 
         return {
             roomId,
@@ -156,5 +156,39 @@ export class MatrixCommands {
         });
     }
 
+
+    async streamMessages(params) {
+
+        const room = this.client.getRoom(params.room.roomId);
+
+        if (!room) {
+            throw new Error(`Room with ID ${params.room.roomId} not found`);
+        }
+
+        return new Promise((resolve, reject) => {
+            const onMessage = (event) => {
+                if (event.getType() === 'm.room.message') {
+                    // callback with the message event
+                    const messageContent = event.getContent();
+                    const sender = event.getSender();
+
+                    params.callback({
+                        roomId: room.roomId,
+                        sender,
+                        body: messageContent.body,
+                    });
+
+                }
+            };
+
+            room.on('Room.timeline', onMessage);
+
+            // Cleanup function to remove the listener
+            return () => {
+                room.off('Room.timeline', onMessage);
+            };
+
+        });
+    }
 
 }

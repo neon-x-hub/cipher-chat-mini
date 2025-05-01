@@ -18,7 +18,7 @@ async function sendMessage(room, message, logDetails = false) {
 
         // Send the message
         const eventId = await client.sendMessage({
-            room,
+            room: { roomId: room.roomId }, // Ensure roomId is passed correctly, only need roomId here
             message
         });
 

@@ -70,19 +70,33 @@ export class DaemonClient {
      * @returns {Promise<Object>} - A promise that resolves with the response data or rejects with an error.
      */
     async sendCommand(action, params = {}) {
-
         await this.connect();
 
         return new Promise((resolve, reject) => {
-            const requestId = randomUUID(); // Generate a unique ID for the command
+            const requestId = randomUUID();
+
+            let isStream = action === 'streamMessages';
+            let resolved = false;
 
             const handler = (response) => {
                 if (!response || response.requestId !== requestId) return;
-                this.ipc.of.matrix_daemon.off('response', handler); // Clean up listener
 
                 if (response.success) {
-                    resolve(response.data);
+                    if (isStream) {
+                        // Stream message received
+                        params.callback(response.data);
+
+                        if (!resolved) {
+                            resolve(); // resolve once to avoid timeout rejection
+                            resolved = true;
+                        }
+
+                    } else {
+                        this.ipc.of.matrix_daemon.off('response', handler);
+                        resolve(response.data);
+                    }
                 } else {
+                    this.ipc.of.matrix_daemon.off('response', handler);
                     reject(new Error(response.error));
                 }
             };
@@ -95,11 +109,13 @@ export class DaemonClient {
                 params
             });
 
-            // Timeout in case the daemon doesn't respond
-            setTimeout(() => {
-                this.ipc.of.matrix_daemon.off('response', handler);
-                reject(new Error(`Timeout waiting for response to command: ${action}`));
-            }, 10000); // 10 seconds timeout
+            // Timeout only for non-streaming commands
+            if (!isStream) {
+                setTimeout(() => {
+                    this.ipc.of.matrix_daemon.off('response', handler);
+                    reject(new Error(`Timeout waiting for response to command: ${action}`));
+                }, 10000);
+            }
         });
     }
 

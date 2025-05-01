@@ -99,18 +99,47 @@ export class MatrixDaemon {
         this.ipc.config.id = `matrix_daemon`;
         this.ipc.config.retry = 1500;
         this.ipc.config.silent = true;
+
         this.ipc.serve(() => {
             this.ipc.server.on('command', async (data, socket) => {
                 try {
                     console.log(`Received command: ${data.action} with params:`, data.params);
 
-                    const result = await this.commands[data.action](data.params);
+                    let result;
 
-                    this.ipc.server.emit(socket, 'response', {
-                        requestId: data.requestId,
-                        success: true,
-                        data: result
-                    });
+                    if (data.action === "streamMessages") {
+                        // Stream messages get emitted differently
+                        result = await this.commands[data.action]({
+                            ...data.params,
+                            callback: (streamData) => {
+                                this.ipc.server.emit(socket, 'response', {
+                                    requestId: data.requestId,
+                                    success: true,
+                                    data: streamData
+                                });
+                            }
+                        });
+
+                        // Optionally, you can send a "stream started" response
+                        this.ipc.server.emit(socket, 'response', {
+                            requestId: data.requestId,
+                            success: true,
+                            data: 'Stream started'
+                        });
+
+                        return; // prevent double response
+                    }
+                    else {
+                        // Normal atomic commands
+                        result = await this.commands[data.action](data.params);
+
+                        this.ipc.server.emit(socket, 'response', {
+                            requestId: data.requestId,
+                            success: true,
+                            data: result
+                        });
+                    }
+
                 } catch (error) {
                     this.ipc.server.emit(socket, 'response', {
                         requestId: data.requestId,
@@ -120,8 +149,10 @@ export class MatrixDaemon {
                 }
             });
         });
+
         this.ipc.server.start();
     }
+
 
 
     /**

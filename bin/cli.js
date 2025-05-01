@@ -49,8 +49,6 @@ room.command('join')
             const { joinRoom } = await import('../src/cli/room/join.mjs');
             const result = await joinRoom(room);
 
-            console.log(JSON.stringify(result, null, 2));
-
 
             console.log(`\n✅ Successfully joined room:`);
             console.log(`   ID: ${result.roomId}`);
@@ -106,10 +104,17 @@ room.command('list')
     .action(async () => {
         console.log('Listing joined rooms...');
 
+        // time measure
+        const start = Date.now();
+
+
         const { listRooms } = await import('../src/cli/room/list.mjs');
+
+
 
         try {
             await listRooms();
+            console.log(`\nDone in ${Date.now() - start} ms`);
             process.exit(0);
         } catch (err) {
             console.error('Error:', err.message);

@@ -3,6 +3,10 @@ import { MatrixCommands } from './commands.mjs';
 import { daemonClient, DaemonClient } from '../daemon/client.mjs';
 import config from '../state/config.js';
 
+import { logger as Logger } from 'matrix-js-sdk/lib/logger.js';
+Logger.setLevel(Logger.levels.SILENT); // No more logs!
+
+
 /**
  * * MatrixClientProxy class to handle direct and daemon commands.
  * * * @class MatrixClientProxy
@@ -26,7 +30,7 @@ export class MatrixClientProxy {
      *
      * @async
      * @private
-     * @returns {Promise<MatrixClient>} - A promise that resolves with the initialized Matrix client instance.
+     * @returns {Promise<sdk.MatrixClient>} - A promise that resolves with the initialized Matrix client instance.
      * @throws {Error} - Throws an error if the client fails to initialize.
      *
      * @description
@@ -52,6 +56,8 @@ export class MatrixClientProxy {
             await new Promise((resolve, reject) => {
                 client.once('sync', (state) => {
                     if (state === 'PREPARED') {
+                        console.log("Direct client is prepared and ready to use.");
+
                         resolve();
                     }
                 });
@@ -88,9 +94,12 @@ export class MatrixClientProxy {
         }
 
         if (!this.directCommands) {
+
             const client = await this._createDirectClient();
+
             this.directCommands = new MatrixCommands(client);
         }
+
         return this.directCommands;
     }
 
@@ -109,12 +118,9 @@ export class MatrixClientProxy {
 
         const commands = await this.getCommands();
 
-        const method = commands[action];
-        if (typeof method !== 'function') {
-            throw new Error(`Unknown command: ${action}`);
-        }
+        const result = commands[action](params);
 
-        return method(params);
+        return result;
 
     }
 
