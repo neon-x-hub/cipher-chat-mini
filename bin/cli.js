@@ -140,6 +140,20 @@ daemon.command('start')
 
     });
 
+daemon.command('stop')
+    .description('Stop the daemon')
+    .action(async () => {
+        const { stopDaemon } = await import('../src/cli/daemon/stop.mjs');
+        console.log('Stopping daemon...');
+        try {
+            await stopDaemon();
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Failed to stop daemon:', error.message);
+            process.exit(1);
+        }
+    })
+
 daemon.command('disable')
     .description('Disable the daemon')
     .action(async () => {
@@ -169,6 +183,20 @@ daemon.command('enable')
             process.exit(1);
         }
     });
+
+daemon.command('state')
+    .description('Check the daemon state')
+    .action(async () => {
+        const { checkState } = await import('../src/cli/daemon/state.mjs');
+        console.log('Checking daemon state...');
+        try {
+            await checkState();
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Failed to check daemon state:', error.message);
+            process.exit(1);
+        }
+    })
 
 // Add the commands to the main program
 program.addCommand(auth);

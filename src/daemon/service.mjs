@@ -2,7 +2,8 @@ import IPC from 'node-ipc';
 import { MatrixCommands } from '../matrix/commands.mjs';
 import * as sdk from 'matrix-js-sdk'
 import config from '../state/config.js';
-
+import { logger as Logger } from 'matrix-js-sdk/lib/logger.js';
+Logger.setLevel(Logger.levels.SILENT);
 /**
  * * MatrixDaemon class to handle IPC communication and Matrix commands.
  * * @class MatrixDaemon
@@ -77,11 +78,13 @@ export class MatrixDaemon {
         const client = await this._createClient();
         this.commands = new MatrixCommands(client);
         this.setupIPC();
+
         return new Promise((resolve) => {
             this.ipc.server.on('start', () => {
                 console.log('IPC server started and listening for commands...');
                 resolve();
             });
+
         });
     }
 
@@ -101,8 +104,10 @@ export class MatrixDaemon {
         this.ipc.config.silent = true;
 
         this.ipc.serve(() => {
+            // Handle commands
             this.ipc.server.on('command', async (data, socket) => {
                 try {
+
                     console.log(`Received command: ${data.action} with params:`, data.params);
 
                     let result;
@@ -120,16 +125,8 @@ export class MatrixDaemon {
                             }
                         });
 
-                        // Optionally, you can send a "stream started" response
-                        this.ipc.server.emit(socket, 'response', {
-                            requestId: data.requestId,
-                            success: true,
-                            data: 'Stream started'
-                        });
-
                         return; // prevent double response
-                    }
-                    else {
+                    } else {
                         // Normal atomic commands
                         result = await this.commands[data.action](data.params);
 
@@ -148,6 +145,38 @@ export class MatrixDaemon {
                     });
                 }
             });
+
+            // Handle daemon stop request
+            this.ipc.server.on('stop_daemon', async (data, socket) => {
+
+                console.log('Received stop_daemon request, shutting down...');
+
+                try {
+                    this.stop();
+
+                    // Emit confirmation to client
+                    this.ipc.server.emit(socket, 'stopped');
+
+                    // Exit the process after short delay
+                    setTimeout(() => {
+                        process.exit(0);
+                    }, 100);
+                } catch (err) {
+                    console.error('Failed to stop daemon:', err);
+                }
+            });
+
+
+        });
+
+        // Start server with error listener
+        this.ipc.server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                console.error(`Error: Another instance of matrix_daemon is already running.`);
+                process.exit(1); // Or throw error if you prefer
+            } else {
+                console.error('IPC Server error:', err);
+            }
         });
 
         this.ipc.server.start();

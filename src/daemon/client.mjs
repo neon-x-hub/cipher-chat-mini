@@ -1,5 +1,11 @@
 import IPC from 'node-ipc';
 import { randomUUID } from 'crypto';
+import path from 'path';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * * DaemonClient class to handle IPC communication with the matrix daemon.
@@ -40,21 +46,126 @@ export class DaemonClient {
 
         this.connecting = new Promise((resolve, reject) => {
             this.ipc.connectTo('matrix_daemon', () => {
-                this.ipc.of.matrix_daemon.on('connect', () => {
-                    this.connected = true;
-                    console.log('Connected to matrix daemon');
 
-                    resolve();
-                });
-                this.ipc.of.matrix_daemon.on('error', (err) => {
+                const daemon = this.ipc.of.matrix_daemon;
+
+                const onConnect = () => {
+                    this.connected = true;
                     this.connecting = null;
-                    reject(err);
-                });
+                    console.log('✅ Connected to matrix daemon');
+                    cleanup();
+                    resolve();
+                };
+
+                const onError = async (err) => {
+                    cleanup();
+                    this.connecting = null;
+
+
+                    if (err.code === 'ENOENT') {
+                        console.log('💤 Daemon not running. Starting daemon...');
+                        await this.startDaemonProcess();
+
+                        // Retry connection after small delay
+                        setTimeout(() => {
+                            this.connect().then(resolve).catch(reject);
+                        }, 800);
+                    } else {
+                        reject(err);
+                    }
+                };
+
+                const cleanup = () => {
+                    daemon.off('connect', onConnect);
+                    daemon.off('error', onError);
+                };
+
+                daemon.on('connect', onConnect);
+                daemon.on('error', onError);
             });
+
         });
 
         return this.connecting;
     }
+
+
+
+    /**
+     * Starts the matrix daemon process in detached mode.
+     *
+     * This function is called if the daemon is not running when we try to connect to it.
+     * It runs the start-daemon-runner.mjs script in a detached Node.js process.
+     *
+     * @private
+     * @returns {Promise<void>} - A promise that resolves when the daemon process has been started.
+     */
+    async startDaemonProcess() {
+
+        const runnerPath = path.resolve(__dirname, './start-daemon-runner.mjs');
+
+        const child = spawn(process.execPath, [runnerPath], {
+            detached: true,
+            stdio: 'ignore', // Don't tie up parent's stdio
+        });
+
+        child.unref(); // Allow parent to exit independently
+    }
+
+    /**
+     * Checks if the matrix daemon is currently running.
+     *
+     * Attempts to establish a connection to the matrix daemon via IPC. If the connection
+     * is successful, the daemon is considered running. If an ENOENT error is encountered,
+     * it indicates that the daemon is not running, and the promise is rejected with `false`.
+     * Other connection errors result in rejection with a detailed error message. If the
+     * connection attempt times out, the promise is rejected with a timeout error.
+     *
+     * @returns {Promise<boolean>} - A promise that resolves with `true` if the daemon is running,
+     *                               or rejects with `false` or an error if not.
+     */
+    async isDaemonRunning() {
+        return new Promise((resolve, reject) => {
+            // Clean up any existing connection first
+            this.ipc.disconnect('matrix_daemon');
+
+            const cleanup = () => {
+                clearTimeout(timeout);
+                this.ipc.disconnect('matrix_daemon');
+                if (daemon) {
+                    daemon.off('connect', onConnect);
+                    daemon.off('error', onError);
+                }
+            };
+
+            let daemon;
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('⌚ Daemon state check timed out.'));
+            }, 3000);
+
+            const onConnect = () => {
+                cleanup();
+                resolve(true);
+            };
+
+            const onError = (err) => {
+                cleanup();
+                if (err.code === 'ENOENT') {
+                    resolve(false);
+                } else {
+                    reject(new Error('Daemon connection error: ' + err.message));
+                }
+            };
+
+            this.ipc.connectTo('matrix_daemon', () => {
+                daemon = this.ipc.of.matrix_daemon;
+                daemon.on('connect', onConnect);
+                daemon.on('error', onError);
+            });
+        });
+    }
+
 
     /**
      * Send a command to the matrix daemon and wait for a response.
@@ -70,7 +181,7 @@ export class DaemonClient {
      * @returns {Promise<Object>} - A promise that resolves with the response data or rejects with an error.
      */
     async sendCommand(action, params = {}) {
-        await this.connect();
+        await this.connect(); // works properly
 
         return new Promise((resolve, reject) => {
             const requestId = randomUUID();
@@ -150,9 +261,10 @@ export class DaemonClient {
                 return resolve();
             }
 
-            // Clean up listeners
-            this.ipc.of.matrix_daemon.removeAllListeners();
-
+            // Clean up listeners on the underlying socket (if exists)
+            if (this.ipc.of.matrix_daemon.socket) {
+                this.ipc.of.matrix_daemon.socket.removeAllListeners();
+            }
             // Disconnect from the daemon
             this.ipc.disconnect('matrix_daemon');
 
@@ -164,6 +276,53 @@ export class DaemonClient {
         });
     }
 
+    /**
+     * Stops the matrix daemon.
+     *
+     * This function sends a request to the daemon to stop and waits for confirmation.
+     * If the daemon confirms it has stopped, this function disconnects from the daemon
+     * and resolves the promise. If the daemon does not respond within 3 seconds, the
+     * promise is rejected with an error.
+     *
+     * @returns {Promise<void>} - A promise that resolves when the daemon has stopped.
+     * @throws {Error} - If not connected to the daemon.
+     */
+    async stopDaemon() {
+
+        if (!this.connected) {
+            throw new Error('Not connected to daemon.');
+        }
+
+        return new Promise((resolve, reject) => {
+            // Emit stop request
+            this.ipc.of.matrix_daemon.emit('stop_daemon');
+
+            // Listen for confirmation
+            const onStopped = async () => {
+                console.log('✅ Received stop confirmation from daemon.');
+
+                this.ipc.of.matrix_daemon.off('stopped', onStopped);
+
+                try {
+                    await this.disconnect();
+                    resolve();
+                } catch (err) {
+                    reject(err);
+                }
+            };
+
+            console.log('⏳ Waiting for daemon to stop...');
+
+
+            this.ipc.of.matrix_daemon.on('stopped', onStopped);
+
+            // Timeout fallback
+            setTimeout(() => {
+                this.ipc.of.matrix_daemon.off('stopped', onStopped);
+                reject(new Error('⌚ Daemon stop request timed out'));
+            }, 10000);
+        });
+    }
 
 }
 

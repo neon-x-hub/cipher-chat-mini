@@ -19,9 +19,6 @@ Logger.setLevel(Logger.levels.SILENT); // No more logs!
 export class MatrixClientProxy {
     constructor() {
         this.directCommands = null;
-
-        console.log("MatrixClientProxy initialized with mode:", config.useDaemon ? 'daemon' : 'direct');
-
         this._mode = config.useDaemon ? 'daemon' : 'direct';
     }
 

@@ -1,10 +1,18 @@
+import { daemonClient } from "../../daemon/client.mjs";
 import { MatrixDaemon } from "../../daemon/service.mjs";
-
 async function startDaemon() {
-    console.log('Starting daemon...');
-    const daemon = new MatrixDaemon();
     try {
-        await daemon.start();
+        const isRunning = await daemonClient.isDaemonRunning();
+
+        if (isRunning) {
+            console.log('🔥 Daemon is already running. No need to start.');
+            return;
+        }
+
+        const daemon = new MatrixDaemon();
+        daemon.start()
+
+
     } catch (error) {
         throw new Error("Daemon Error: " + error.message);
     }
