@@ -1,5 +1,5 @@
 const blessed = require('neo-blessed');
-
+const InChatCommands = require('./in-chat.js');
 
 async function initTUI(room) {
     const screen = blessed.screen({
@@ -11,7 +11,7 @@ async function initTUI(room) {
         top: 0,
         left: 0,
         width: '100%',
-        height: '90%',
+        height: '93%',
         tags: true,
         scrollable: true,
         alwaysScroll: true,
@@ -26,9 +26,9 @@ async function initTUI(room) {
             type: 'line',
         },
         style: {
-            border: { fg: 'cyan' },
+            border: { fg: 'white' },
             scrollbar: {
-                bg: 'cyan',
+                bg: 'white',
             },
         },
     });
@@ -42,9 +42,11 @@ async function initTUI(room) {
             type: 'line',
         },
         style: {
-            border: { fg: 'green' },
+            border: { fg: 'white' },
         },
     });
+
+    const inChatCommands = new InChatCommands(screen, messageList, inputBar);
 
     // Ignore arrow keys in input to prevent conflict
     inputBar.ignoreKeys = ['up', 'down', 'pageup', 'pagedown'];
@@ -106,7 +108,6 @@ async function initTUI(room) {
 
         const { sendMessage } = await import('../cli/chat/send.mjs');
 
-
         if (text.trim()) {
             try {
                 const message = {
@@ -114,9 +115,17 @@ async function initTUI(room) {
                     body: text,
                 };
 
-                await sendMessage(room, message);
+                // Check if the command is available
+                if (inChatCommands.isAvailableCommand(text)) {
+                    inChatCommands.executeCommand(text);
+                }
+                else {
+                    await sendMessage(room, message);
+                }
+
+
             } catch (error) {
-                messageList.pushLine(`SYSTEM ~ Error: ${error.message}`);
+                messageList.pushLine(`{red-fg}{inverse}{bold}SYSTEM ~ Error: ${error.message}{/bold}{/inverse}{/red-fg}`);
             }
             messageList.setScrollPerc(100);
         }

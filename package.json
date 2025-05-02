@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "color-hash": "^2.0.2",
     "commander": "^13.1.0",
     "matrix-js-sdk": "^37.4.0",
     "neo-blessed": "^0.2.0",

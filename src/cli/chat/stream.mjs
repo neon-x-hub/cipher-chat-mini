@@ -1,4 +1,5 @@
 import { clientProxy } from "../../matrix/client.mjs";
+import string2color from "../../utils/string2color.js";
 
 async function streamChatMessages(room, messageList, screen) {
 
@@ -11,7 +12,9 @@ async function streamChatMessages(room, messageList, screen) {
     const result = await client.streamMessages({
         room: { roomId: room.roomId },
         callback: (message) => {
-            messageList.pushLine(`${message.sender}: ${message.body}`);
+            const senderColor = string2color(message.sender);
+            messageList.pushLine(`{${senderColor}-fg}${message.sender}{/${senderColor}-fg}: ${message.body}`
+            );
             messageList.setScrollPerc(100);
             screen.render();
         }

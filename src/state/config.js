@@ -3,5 +3,5 @@ module.exports = {
   "userId": "@admin:localhost",
   "accessToken": "syt_YWRtaW4_ghIGMJMJgwQBAnLjofEL_4DZxxX",
   "deviceId": "VIJBHRQTXV",
-  "useDaemon": false
+  "useDaemon": true
 };

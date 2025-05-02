@@ -8,7 +8,7 @@ async function setDaemon(state) {
         const content = `module.exports = ${JSON.stringify(configContent, null, 2)};\n`;
         await fs.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
         await fs.writeFile(CONFIG_PATH, content, "utf8");
-        console.log(`\n✅ Daemon Preference saved`);
+        console.log(`✅ Daemon Preference saved`);
     }
 
     try {
