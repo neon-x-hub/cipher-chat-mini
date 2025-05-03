@@ -44,27 +44,37 @@ export class MatrixCommands {
     */
 
     /**
-     * Retrieves the list of rooms the client is currently joined to.
-     *
-     * @async
-     * @returns {Promise<sdk.Room[]>} - A promise that resolves with an array of Room objects.
-     */
-    async listRooms() {
+   * Lists Matrix rooms with optional filtering by membership.
+   *
+   * @async
+   * @param {Object} [options] - Filtering options.
+   * @param {string} [options.membership] - Membership filter: "join", "invite", "leave", or null for all.
+   * @returns {Promise<Array>} - A promise that resolves to the list of rooms.
+   */
+    async listRooms(options = {}) {
+        const { membership = "join" } = options;
 
-        return this.client.getRooms().map(room => {
-            const roomName = room.name || "Unnamed Room";
-            const memberCount = room.getJoinedMembers().length;
-            const lastEvent = room.timeline[room.timeline.length - 1];
-            const lastMessage = lastEvent?.getContent()?.body || "No messages yet";
+        return this.client.getRooms()
+            .filter(room => {
+                // If membership filter is null or undefined, include all rooms
+                if (!membership) return true;
 
-            return {
-                roomId: room.roomId,
-                roomName,
-                memberCount,
-                lastEvent: lastEvent?.getDate(),
-                lastMessage
-            };
-        });
+                return room.getMyMembership() === membership;
+            })
+            .map(room => {
+                const roomName = room.name || "Unnamed Room";
+                const memberCount = room.getJoinedMembers().length;
+                const lastEvent = room.timeline?.[room.timeline.length - 1];
+                const lastMessage = lastEvent?.getContent()?.body || "No messages yet";
+
+                return {
+                    roomId: room.roomId,
+                    roomName,
+                    memberCount,
+                    lastEvent: lastEvent?.getDate(),
+                    lastMessage
+                };
+            });
     }
 
 
@@ -126,6 +136,19 @@ export class MatrixCommands {
             memberCount,
             roomType,
         };
+    }
+
+    /**
+     * Leaves a specified Matrix room.
+     *
+     * @async
+     * @param {Object} params - The parameters for leaving the room.
+     * @param {string} params.roomId - The room object containing the ID.
+     * @returns {Promise} - A promise that resolves when the room has been successfully left.
+     * @throws Will throw an error if the operation fails.
+     */
+    async leaveRoom(params) {
+        return await this.client.leave(params.roomId);
     }
 
 

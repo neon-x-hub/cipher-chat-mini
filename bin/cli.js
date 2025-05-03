@@ -34,6 +34,7 @@ auth.command('signup')
     });
 
 // Room management commands
+
 const room = new Command('room')
     .description('Room management commands');
 
@@ -69,9 +70,20 @@ room.command('join')
 
 room.command('leave <roomId>')
     .description('Exit a room')
-    .action((roomId) => {
+    .action(async (roomId) => {
         console.log(`Leaving room ${roomId}...`);
-        // pseudo: leaveRoom(roomId);
+        // Dynamically import the leaveRoom function
+        const { leaveRoom } = await import('../src/cli/room/leave.mjs');
+
+        leaveRoom({ roomId })
+            .then(() => {
+                console.log('✅ Successfully left the room!');
+                process.exit(0);
+            })
+            .catch((error) => {
+                console.error('❌ Failed to leave room:', error.message);
+                process.exit(1);
+            });
     });
 
 room.command('create')
@@ -100,26 +112,29 @@ room.command('create')
     });
 
 room.command('list')
-    .description('Show joined rooms')
-    .action(async () => {
-        console.log('Listing joined rooms...');
-
-        // time measure
-        const start = Date.now();
-
+    .description('Show rooms. By default, only joined rooms are shown.')
+    .option('-m, --membership <type>', 'Filter by membership: join, invite, leave, all', 'join')
+    .action(async (options) => {
+        console.log(`Listing rooms with membership: ${options.membership}`);
 
         const { listRooms } = await import('../src/cli/room/list.mjs');
 
-
-
         try {
-            await listRooms();
-            console.log(`\nDone in ${Date.now() - start} ms`);
+            let membership = options.membership;
+
+            // Convert "all" to null to get all rooms
+            if (membership === 'all') {
+                membership = null;
+            }
+
+            await listRooms({ membership });
             process.exit(0);
         } catch (err) {
             console.error('Error:', err.message);
+            process.exit(1);
         }
     });
+
 
 // Daemon management commands
 const daemon = new Command('daemon')
