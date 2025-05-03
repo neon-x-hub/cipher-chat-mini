@@ -1,25 +1,23 @@
 import { clientProxy } from "../../matrix/client.mjs";
 
-async function joinRoom(roomObj) {
+async function leaveRoom(room) {
     const client = clientProxy;
 
     try {
+        await client.leaveRoom(room);
 
-        // Join the room - this returns a Room object
-        const room = await client.joinRoom(roomObj);
-
-        return room;
+        return;
 
     } catch (error) {
         // Handle specific Matrix errors
         if (error.errcode === 'M_FORBIDDEN') {
-            throw new Error('You do not have permission to join this room');
+            throw new Error('You do not have permission to do this action.');
         }
         if (error.errcode === 'M_NOT_FOUND') {
             throw new Error('Room not found - check the ID/alias');
         }
-        throw new Error(`Join failed: ${error.message}`);
+        throw new Error(`Leave failed: ${error.message}`);
     }
 }
 
-export { joinRoom };
+export { leaveRoom };

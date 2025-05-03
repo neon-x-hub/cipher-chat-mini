@@ -1,17 +1,17 @@
 const blessed = require('neo-blessed');
+const InChatCommands = require('./in-chat.js');
 
-
-function initTUI(roomId, roomName, room) {
+async function initTUI(room) {
     const screen = blessed.screen({
         smartCSR: true,
-        title: `Chat Room: ${roomName}`,
+        title: `Chat Room: ${room.roomName}`,
     });
 
     const messageList = blessed.box({
         top: 0,
         left: 0,
         width: '100%',
-        height: '90%',
+        height: '93%',
         tags: true,
         scrollable: true,
         alwaysScroll: true,
@@ -26,9 +26,9 @@ function initTUI(roomId, roomName, room) {
             type: 'line',
         },
         style: {
-            border: { fg: 'cyan' },
+            border: { fg: 'white' },
             scrollbar: {
-                bg: 'cyan',
+                bg: 'white',
             },
         },
     });
@@ -42,9 +42,11 @@ function initTUI(roomId, roomName, room) {
             type: 'line',
         },
         style: {
-            border: { fg: 'green' },
+            border: { fg: 'white' },
         },
     });
+
+    const inChatCommands = new InChatCommands(screen, messageList, inputBar);
 
     // Ignore arrow keys in input to prevent conflict
     inputBar.ignoreKeys = ['up', 'down', 'pageup', 'pagedown'];
@@ -106,13 +108,24 @@ function initTUI(roomId, roomName, room) {
 
         const { sendMessage } = await import('../cli/chat/send.mjs');
 
-
         if (text.trim()) {
             try {
-                await sendMessage(roomId, text);
-                messageList.pushLine(`You: ${text}`);
+                const message = {
+                    type: 'm.text',
+                    body: text,
+                };
+
+                // Check if the command is available
+                if (inChatCommands.isAvailableCommand(text)) {
+                    inChatCommands.executeCommand(text);
+                }
+                else {
+                    await sendMessage(room, message);
+                }
+
+
             } catch (error) {
-                messageList.pushLine(`SYSTEM ~ Error: ${error.message}`);
+                messageList.pushLine(`{red-fg}{inverse}{bold}SYSTEM ~ Error: ${error.message}{/bold}{/inverse}{/red-fg}`);
             }
             messageList.setScrollPerc(100);
         }
@@ -123,8 +136,13 @@ function initTUI(roomId, roomName, room) {
 
     // Initial focus
     inputBar.focus();
-    messageList.pushLine(`You joined room: ${roomName} (${roomId})`);
+    messageList.pushLine(`You joined room: ${room.roomName} (${room.roomId})`);
     screen.render();
+
+    // Stream messages from the room
+    const { streamChatMessages } = await import('../cli/chat/stream.mjs');
+
+    await streamChatMessages(room, messageList, screen);
 
     return { screen, messageList, inputBar };
 }

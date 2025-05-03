@@ -34,6 +34,7 @@ auth.command('signup')
     });
 
 // Room management commands
+
 const room = new Command('room')
     .description('Room management commands');
 
@@ -44,19 +45,22 @@ room.command('join')
         try {
             console.log(`Attempting to join room ${roomIdentifier}...`);
 
+            const room = { roomId: roomIdentifier };
+
             const { joinRoom } = await import('../src/cli/room/join.mjs');
-            const result = await joinRoom(roomIdentifier);
+            const result = await joinRoom(room);
+
 
             console.log(`\n✅ Successfully joined room:`);
+            console.log(`   ID: ${result.roomId}`);
             console.log(`   Name: ${result.roomName}`);
             console.log(`   Alias: ${result.canonicalAlias || 'None'}`);
-            console.log(`   ID: ${result.roomId}`);
-            console.log(`   Members: ${result.room.getJoinedMembers().length}`);
-            console.log(`   Type: ${result.room.getType() || 'Regular chat'}\n`);
+            console.log(`   Members: ${result.memberCount}`);
+            console.log(`   Type: ${result.roomType}\n`);
 
 
             // Start the TUI
-            initTUI(result.roomId, result.roomName , result.room);
+            initTUI(result);
 
         } catch (error) {
             console.error('❌ Failed to join room:', error.message);
@@ -66,9 +70,20 @@ room.command('join')
 
 room.command('leave <roomId>')
     .description('Exit a room')
-    .action((roomId) => {
+    .action(async (roomId) => {
         console.log(`Leaving room ${roomId}...`);
-        // pseudo: leaveRoom(roomId);
+        // Dynamically import the leaveRoom function
+        const { leaveRoom } = await import('../src/cli/room/leave.mjs');
+
+        leaveRoom({ roomId })
+            .then(() => {
+                console.log('✅ Successfully left the room!');
+                process.exit(0);
+            })
+            .catch((error) => {
+                console.error('❌ Failed to leave room:', error.message);
+                process.exit(1);
+            });
     });
 
 room.command('create')
@@ -97,21 +112,127 @@ room.command('create')
     });
 
 room.command('list')
-    .description('Show joined rooms')
-    .action(async () => {
-        console.log('Listing joined rooms...');
+    .description('Show rooms. By default, only joined rooms are shown.')
+    .option('-m, --membership <type>', 'Filter by membership: join, invite, leave, all', 'join')
+    .action(async (options) => {
+        console.log(`Listing rooms with membership: ${options.membership}`);
 
         const { listRooms } = await import('../src/cli/room/list.mjs');
 
         try {
-            await listRooms();
+            let membership = options.membership;
+
+            // Convert "all" to null to get all rooms
+            if (membership === 'all') {
+                membership = null;
+            }
+
+            await listRooms({ membership });
+            process.exit(0);
         } catch (err) {
             console.error('Error:', err.message);
+            process.exit(1);
         }
     });
+
+
+// Daemon management commands
+const daemon = new Command('daemon')
+    .description('Daemon management commands');
+
+daemon.command('start')
+    .description('Start the daemon')
+    .action(async () => {
+        const { startDaemon } = await import('../src/cli/daemon/start.mjs');
+        console.log('Starting daemon...');
+        try {
+            await startDaemon();
+            console.log('✅ Daemon started successfully!');
+        } catch (error) {
+            console.error('❌ Daemon failed to start:', error.message);
+            process.exit(1);
+        }
+
+    });
+
+daemon.command('stop')
+    .description('Stop the daemon')
+    .action(async () => {
+        const { stopDaemon } = await import('../src/cli/daemon/stop.mjs');
+        console.log('Stopping daemon...');
+        try {
+            await stopDaemon();
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Failed to stop daemon:', error.message);
+            process.exit(1);
+        }
+    })
+
+daemon.command('disable')
+    .description('Disable the daemon')
+    .action(async () => {
+        const { setDaemon } = await import('../src/cli/daemon/set.mjs');
+        try {
+            await setDaemon(false);
+            console.log('😴 Daemon disabled successfully!');
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Failed to disable daemon:', error.message);
+            process.exit(1);
+        }
+    });
+
+daemon.command('enable')
+    .description('Enable the daemon')
+    .action(async () => {
+        const { setDaemon } = await import('../src/cli/daemon/set.mjs');
+        try {
+            await setDaemon(true);
+            console.log('🚀 Daemon enabled successfully!');
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Failed to enable daemon:', error.message);
+            process.exit(1);
+        }
+    });
+
+daemon.command('state')
+    .description('Check the daemon state')
+    .action(async () => {
+        const { checkState } = await import('../src/cli/daemon/state.mjs');
+        console.log('Checking daemon state...');
+        try {
+            await checkState();
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Failed to check daemon state:', error.message);
+            process.exit(1);
+        }
+    })
+
+daemon.command('config')
+    .description('Check the current daemon config')
+    .action(async () => {
+        const { getDaemonConfig } = await import('../src/cli/daemon/config.mjs');
+        try {
+            getDaemonConfig();
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Failed to check daemon config:', error.message);
+            process.exit(1);
+        }
+    })
+
 
 // Add the commands to the main program
 program.addCommand(auth);
 program.addCommand(room);
+program.addCommand(daemon);
+program
+    .version('1.0.0')
+    .description('Matrix CLI Tool')
+    .option('-d, --debug', 'Enable debug mode', false)
+    .option('-v, --verbose', 'Enable verbose output', false);
 
 program.parse();
