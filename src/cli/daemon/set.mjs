@@ -11,6 +11,10 @@ async function setDaemon(state) {
         console.log(`✅ Daemon Preference saved`);
     }
 
+    if (!config) {
+        throw new Error("❌ No configuration found. Please run the login command first.");
+    }
+
     try {
         // Disable the daemon in the config
         config.useDaemon = state;
