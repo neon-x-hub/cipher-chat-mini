@@ -1,6 +1,7 @@
 import * as sdk from "matrix-js-sdk";
 import { logger as Logger } from 'matrix-js-sdk/lib/logger.js';
 Logger.setLevel(Logger.levels.SILENT);
+
 import readline from "readline";
 import fs from "fs/promises";
 import path from "path";

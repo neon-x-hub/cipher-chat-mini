@@ -1,10 +1,12 @@
-import * as sdk from 'matrix-js-sdk';
-
+// Matrix client
+import {
+    MatrixClient,
+} from 'matrix-bot-sdk';
 /**
  * MatrixCommands class to handle Matrix operations.
- * * @class MatrixCommands
- * * @description This class provides methods to manage authentication, rooms, and chat messages in a Matrix client.
- * * @property {sdk.MatrixClient} client - The Matrix client instance used to interact with the Matrix server.
+ * @class MatrixCommands
+ * @description This class provides methods to manage authentication, rooms, and chat messages in a Matrix client.
+ * @property {MatrixClient} client - The Matrix client instance used to interact with the Matrix server.
  */
 export class MatrixCommands {
     /**
@@ -43,38 +45,82 @@ export class MatrixCommands {
     ==================================================================
     */
 
+
     /**
-   * Lists Matrix rooms with optional filtering by membership.
-   *
-   * @async
-   * @param {Object} [options] - Filtering options.
-   * @param {string} [options.membership] - Membership filter: "join", "invite", "leave", or null for all.
-   * @returns {Promise<Array>} - A promise that resolves to the list of rooms.
-   */
+     * Lists Matrix rooms with optional filtering by membership.
+     *
+     * @async
+     * @param {Object} [options] - Filtering options.
+     * @param {string} [options.membership] - Membership filter: "join", "invite", "leave", or null for all.
+     * @returns {Promise<Array>} - A promise that resolves to the list of rooms.
+     */
     async listRooms(options = {}) {
         const { membership = "join" } = options;
 
-        return this.client.getRooms()
-            .filter(room => {
-                // If membership filter is null or undefined, include all rooms
-                if (!membership) return true;
+        let roomIds = [];
 
-                return room.getMyMembership() === membership;
-            })
-            .map(room => {
-                const roomName = room.name || "Unnamed Room";
-                const memberCount = room.getJoinedMembers().length;
-                const lastEvent = room.timeline?.[room.timeline.length - 1];
-                const lastMessage = lastEvent?.getContent()?.body || "No messages yet";
+        if (!membership || membership === "join") {
+            roomIds = await this.client.getJoinedRooms();
+        } else if (membership === "invite") {
+            // For invites, fetch the sync state
+            const sync = await this.client.getSyncState();
+            roomIds = Object.keys(sync.rooms?.invite || {});
+        } else if (membership === "leave") {
+            // Similarly for left rooms
+            const sync = await this.client.getSyncState();
+            roomIds = Object.keys(sync.rooms?.leave || {});
+        } else {
+            // Invalid membership filter
+            throw new Error(`Unknown membership filter: ${membership}`);
+        }
 
-                return {
-                    roomId: room.roomId,
-                    roomName,
-                    memberCount,
-                    lastEvent: lastEvent?.getDate(),
-                    lastMessage
-                };
+        const rooms = [];
+
+        for (const roomId of roomIds) {
+            let roomName = "Unnamed Room";
+            let memberCount = 0;
+            let lastEvent = null;
+            let lastMessage = "No messages yet";
+
+            try {
+                // Try to get the room name (from state event)
+                const nameEvent = await this.client.getRoomStateEvent(roomId, "m.room.name", "");
+                if (nameEvent?.name) {
+                    roomName = nameEvent.name;
+                }
+            } catch (e) {
+                // If no name event, skip error
+            }
+
+            try {
+                // Get member count
+                const members = await this.client.getJoinedRoomMembers(roomId);
+                memberCount = members.length;
+            } catch (e) {
+                // Skip if failed
+            }
+
+            try {
+                // Get latest messages (fetch most recent messages)
+                const messages = await this.client.getMessages(roomId, undefined, 10, "b"); // Getting the last 10 messages
+                if (messages.chunk && messages.chunk.length > 0) {
+                    lastEvent = messages.chunk[0];
+                    lastMessage = lastEvent.content?.body || "Non-text message";
+                }
+            } catch (e) {
+                // Skip if no messages or error fetching
+            }
+
+            rooms.push({
+                roomId,
+                roomName,
+                memberCount,
+                lastEvent: lastEvent?.origin_server_ts ? new Date(lastEvent.origin_server_ts) : null,
+                lastMessage
             });
+        }
+
+        return rooms;
     }
 
 
@@ -95,39 +141,50 @@ export class MatrixCommands {
      *
      * @async
      * @param {{roomId: string}} params - The parameters for joining the room.
-     * @returns {Promise<{{roomId: string, roomCurrentState: sdk.RoomState, roomName: string, canonicalAlias: string, memberCount: number, roomType: string}}>} - A promise that resolves with the joined room's details.
-     *
+     * @returns {Promise<{{roomId: string, roomName: string, canonicalAlias: string, memberCount: number, roomType: string}}>} - A promise that resolves with the joined room's details.
      */
     async joinRoom(params) {
+        const { roomId } = params;
 
-        const room = this.client.getRoom(params.roomId);
-        if (!room) {
-            throw new Error(`Room with ID ${params.roomId} not found`);
+        // Join the room
+        await this.client.joinRoom(roomId);
+
+        let roomName = "Unnamed Room";
+        let canonicalAlias = "None";
+        let memberCount = 0;
+        let roomType = "Regular chat"; // Default room type (could be specialized in the future)
+
+        // Fetch room state details
+        try {
+            // Fetch the room name (m.room.name)
+            const nameEvent = await this.client.getRoomStateEvent(roomId, "m.room.name", "");
+            if (nameEvent?.name) {
+                roomName = nameEvent.name;
+            }
+        } catch (error) {
+            console.error("Error fetching room name:", error);
         }
-        // Join the room - this returns a Room object
-        await this.client.joinRoom(params.roomId);
-        // Wait for room state to fully load if needed
-        const roomName = room.name ||
-            room.currentState?.name ||
-            'Unnamed Room';
-        const canonicalAlias = room.canonicalAlias || 'None';
-        const roomId = room.roomId;
-        const memberCount = room.getJoinedMembers().length;
-        const roomType = room.getType() || 'Regular chat';
 
-        // Wait for room state to fully load if needed
-        if (!room.currentState) {
-            await new Promise(resolve => {
-                const onRoomState = () => {
-                    if (room.roomCurrentState) {
-                        this.client.off('RoomState.events', onRoomState);
-                        resolve();
-                    }
-                };
-                this.client.on('RoomState.events', onRoomState);
-            });
-
+        try {
+            // Fetch the canonical alias (m.room.canonical_alias)
+            const aliasEvent = await this.client.getRoomStateEvent(roomId, "m.room.canonical_alias", "");
+            if (aliasEvent?.alias) {
+                canonicalAlias = aliasEvent.alias;
+            }
+        } catch (error) {
+            console.error("Error fetching room canonical alias:", error);
         }
+
+        try {
+            // Get the member count (list of joined members)
+            const members = await this.client.getJoinedRoomMembers(roomId);
+            memberCount = members.length;
+        } catch (error) {
+            console.error("Error fetching room members:", error);
+        }
+
+        // You can define `roomType` here, depending on your application's room type categorization (e.g., "DM" for direct messages).
+        // For now, it defaults to "Regular chat".
 
         return {
             roomId,
@@ -137,6 +194,7 @@ export class MatrixCommands {
             roomType,
         };
     }
+
 
     /**
      * Leaves a specified Matrix room.

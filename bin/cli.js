@@ -134,7 +134,12 @@ room.command('list')
                 membership = null;
             }
 
+            const startTime = Date.now();
+
             await listRooms({ membership });
+
+            console.log(`Done in ${Date.now() - startTime}ms`);
+
             process.exit(0);
         } catch (err) {
             console.error('Error:', err.message);

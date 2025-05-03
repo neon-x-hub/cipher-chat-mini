@@ -142,7 +142,7 @@ async function initTUI(room) {
     // Stream messages from the room
     const { streamChatMessages } = await import('../cli/chat/stream.mjs');
 
-    await streamChatMessages(room, messageList, screen);
+    //await streamChatMessages(room, messageList, screen);
 
     return { screen, messageList, inputBar };
 }
