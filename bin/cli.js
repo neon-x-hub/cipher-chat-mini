@@ -15,8 +15,15 @@ auth.command('login')
         // Dynamically import the login.mjs
         const { interactiveLogin } = await import('../src/cli/auth/login.mjs');
 
-        await interactiveLogin();
-        // pseudo: authenticateUser();
+        try {
+            await interactiveLogin();
+            console.log('✅ Login successful!');
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Login failed:', error.message);
+            process.exit(1);
+
+        }
     });
 
 auth.command('logout')
