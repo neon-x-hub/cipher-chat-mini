@@ -1,5 +1,6 @@
 const blessed = require('neo-blessed');
-const InChatCommands = require('./in-chat.js');
+
+
 
 async function initTUI(room) {
     const screen = blessed.screen({
@@ -46,7 +47,24 @@ async function initTUI(room) {
         },
     });
 
-    const inChatCommands = new InChatCommands(screen, messageList, inputBar);
+
+    let streamingLocked = false;
+
+    let inChatCommands;
+
+    (async () => {
+        const { InChatCommands } = await import('./in-chat.mjs');
+        inChatCommands = new InChatCommands(
+            room,
+            screen,
+            messageList,
+            inputBar,
+            (lockState) => streamingLocked = !lockState
+        );
+    })();
+
+
+
 
     // Ignore arrow keys in input to prevent conflict
     inputBar.ignoreKeys = ['up', 'down', 'pageup', 'pagedown'];
@@ -67,7 +85,6 @@ async function initTUI(room) {
         screen.render();
     });
 
-    // Message list scrolling (only when messageList is focused)
     messageList.key(['up', 'k'], () => {
         messageList.scroll(-1);
         screen.render();
@@ -88,7 +105,6 @@ async function initTUI(room) {
         screen.render();
     });
 
-    // Handle up/down arrows when input is focused
     inputBar.on('keypress', (ch, key) => {
         if (key.name === 'up' || key.name === 'down') {
             // Only scroll if input is empty or at boundary
@@ -103,36 +119,54 @@ async function initTUI(room) {
         }
     });
 
-    // Input submission
     inputBar.on('submit', async (text) => {
-
         const { sendMessage } = await import('../cli/chat/send.mjs');
 
         if (text.trim()) {
             try {
-                const message = {
-                    type: 'm.text',
-                    body: text,
-                };
+                const trimmed = text.trim();
 
-                // Check if the command is available
-                if (inChatCommands.isAvailableCommand(text)) {
-                    inChatCommands.executeCommand(text);
-                }
-                else {
+                // If starts with double slash "//" -> treat as normal message starting with "/"
+                if (trimmed.startsWith('//')) {
+                    const message = {
+                        type: 'm.text',
+                        body: trimmed.slice(1), // Remove only one slash, keep one
+                    };
                     await sendMessage(room, message);
                 }
-
+                // If starts with single slash -> treat as command
+                else if (trimmed.startsWith('/')) {
+                    // Check if it's a known command
+                    const commandName = trimmed.split(/\s+/)[0]; // e.g., "/history"
+                    if (inChatCommands.isAvailableCommand(commandName)) {
+                        inChatCommands.executeCommand(trimmed);
+                    } else {
+                        // Unknown command warning
+                        messageList.pushLine(`{yellow-fg}SYSTEM ~ Unknown command "${commandName}".{/yellow-fg}`);
+                        messageList.pushLine(`{yellow-fg}Tip: If you want to send a message starting with "/", type "//" instead.{/yellow-fg}`);
+                    }
+                }
+                // Regular message
+                else {
+                    const message = {
+                        type: 'm.text',
+                        body: trimmed,
+                    };
+                    await sendMessage(room, message);
+                }
 
             } catch (error) {
                 messageList.pushLine(`{red-fg}{inverse}{bold}SYSTEM ~ Error: ${error.message}{/bold}{/inverse}{/red-fg}`);
             }
+
             messageList.setScrollPerc(100);
         }
+
         inputBar.clearValue();
         screen.render();
         inputBar.focus();
     });
+
 
     // Initial focus
     inputBar.focus();
@@ -142,7 +176,7 @@ async function initTUI(room) {
     // Stream messages from the room
     const { streamChatMessages } = await import('../cli/chat/stream.mjs');
 
-    //await streamChatMessages(room, messageList, screen);
+    await streamChatMessages(room, messageList, screen, () => !streamingLocked);
 
     return { screen, messageList, inputBar };
 }
