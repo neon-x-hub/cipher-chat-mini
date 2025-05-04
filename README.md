@@ -7,8 +7,6 @@ Got it — that’s a solid foundation for a clean, minimalistic Matrix CLI clie
 Minimalistic & Aesthetic CLI Client for Matrix Servers
 *Built with Node.js • Low memory footprint • Future Rust port in progress*
 
-![CipherChat Logo](#) <!-- Optional: Add a logo if you have one -->
-
 ---
 
 ## ✨ Overview
