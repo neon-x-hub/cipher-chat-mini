@@ -4,7 +4,6 @@ const { Command } = require('commander');
 const program = new Command();
 const initTUI = require('../src/tui/chat');
 const SimpleTimeParse = require('../src/utils/simple-time-parse.js');
-
 // Authentication commands
 const auth = new Command('auth')
     .description('Authentication commands');

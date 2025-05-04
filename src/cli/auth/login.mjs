@@ -30,9 +30,7 @@ async function login({ homeserverUrl, username, password }) {
         // Perform the login with the provided credentials
         const { accessToken, userId, deviceId } = await MatrixCommands.login({ homeserverUrl, username, password });
 
-        console.log("\n✅ Login successful!");
-        console.log("User ID:", userId);
-        console.log("Access Token:", accessToken);
+        console.log("\n✨ Login successful!");
 
         return {
             credentials: { homeserverUrl, userId: userId, accessToken: accessToken, deviceId: deviceId, useDaemon: true }
@@ -47,7 +45,7 @@ async function saveCredentialsToConfig(credentials) {
     const content = `module.exports = ${JSON.stringify(credentials, null, 2)};\n`;
     await fs.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
     await fs.writeFile(CONFIG_PATH, content, "utf8");
-    console.log(`\n✅ Credentials saved to ${CONFIG_PATH}`);
+    console.log(`\n✅ Credentials saved`);
 }
 
 /**
@@ -61,11 +59,9 @@ export async function interactiveLogin() {
 
     await saveCredentialsToConfig(savedCredentials);
 
-    client.startClient();
-
     process.stdin.resume();
 
-    return { client, credentials: savedCredentials };
+    return { credentials: savedCredentials };
 }
 
 // If run directly (node src/login.mjs), execute immediately

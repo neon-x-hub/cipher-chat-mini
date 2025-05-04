@@ -142,7 +142,7 @@ async function initTUI(room) {
                         inChatCommands.executeCommand(trimmed);
                     } else {
                         // Unknown command warning
-                        messageList.pushLine(`{yellow-fg}SYSTEM ~ Unknown command "${commandName}".{/yellow-fg}`);
+                        messageList.pushLine(`{yellow-fg}{inverse}{bold}SYSTEM ~ Unknown command "${commandName.length > 10 ? commandName.slice(0, 10) + '...' : commandName}".{/bold}{/inverse}{/yellow-fg}`);
                         messageList.pushLine(`{yellow-fg}Tip: If you want to send a message starting with "/", type "//" instead.{/yellow-fg}`);
                     }
                 }

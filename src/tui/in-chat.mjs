@@ -22,9 +22,17 @@ class InChatCommands {
     }
 
     help() {
+        const DESCRIPTIONS = {
+            '/help': 'Show available commands',
+            '/clear': 'Clear the chat history',
+            '/exit': 'Exit the chat',
+            '/error': 'Simulate an error (fun)',
+            '/history': 'Fetch chat history between two times (e.g., /history 2d now) [Streaming off!!]',
+            '/sync': 'Sync messages from a certain point to now (e.g., /sync 2d)',
+        }
         this.messageList.pushLine('{green-fg}{inverse}SYSTEM ~ Available commands:{/inverse}{/green-fg}');
         for (const command in this.commands) {
-            this.messageList.pushLine(`> {green-fg}${command}{/green-fg}`);
+            this.messageList.pushLine(`> {green-fg}${command}{/green-fg} -- ${DESCRIPTIONS[command]}`);
         }
     }
 
