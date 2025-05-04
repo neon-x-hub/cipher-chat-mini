@@ -1,4 +1,5 @@
-// bin/cli.js
+#!/usr/bin/env node
+
 const { Command } = require('commander');
 const program = new Command();
 const initTUI = require('../src/tui/chat');
@@ -310,8 +311,9 @@ program.addCommand(auth);
 program.addCommand(room);
 program.addCommand(daemon);
 program
+    .name('cich')
     .version('1.0.0')
-    .description('Matrix CLI Tool')
+    .description('Minimal, Aeasthetic CLI for Matrix.')
     .option('-d, --debug', 'Enable debug mode', false)
     .option('-v, --verbose', 'Enable verbose output', false);
 
