@@ -1,9 +1,21 @@
+import fs from 'fs'
+import path from 'path'
 import IPC from 'node-ipc';
-import { MatrixCommands } from '../matrix/commands.mjs';
-import * as sdk from 'matrix-js-sdk'
 import config from '../state/config.js';
-import { logger as Logger } from 'matrix-js-sdk/lib/logger.js';
-Logger.setLevel(Logger.levels.SILENT);
+import { MatrixCommands } from '../matrix/commands.mjs';
+// Matrix client
+import {
+    MatrixClient,
+    SimpleFsStorageProvider,
+    AutojoinRoomsMixin,
+    LogService,
+    LogLevel,
+    RustSdkCryptoStorageProvider
+} from 'matrix-bot-sdk';
+
+LogService.setLevel(LogLevel.INFO); // Set to 'silent' to suppress logs
+
+
 /**
  * * MatrixDaemon class to handle IPC communication and Matrix commands.
  * * @class MatrixDaemon
@@ -23,44 +35,36 @@ export class MatrixDaemon {
      * Creates and initializes a Matrix client instance.
      *
      * @async
-     * @returns {Promise<sdk.MatrixClient>} - A promise that resolves to the initialized Matrix client.
+     * @returns {Promise<MatrixClient>} - A promise that resolves to the initialized Matrix client.
      *
      * @description
      * This function creates a new Matrix client using the provided configuration parameters,
      * sets up error handling for client errors, and waits until the client's initial sync
      * state is 'PREPARED'. If the client initialization fails, it throws an error.
      */
-
     async _createClient() {
-        const client = sdk.createClient({
-            baseUrl: config.homeserverUrl,
-            userId: config.userId,
-            accessToken: config.accessToken,
-            deviceId: config.deviceId,
-            timelineSupport: true,
-        });
+        const storage = new SimpleFsStorageProvider('storage.json');
+        const cryptoStore = new RustSdkCryptoStorageProvider('crypto_store');
 
-        client.on('error', (error) => {
-            console.error('Matrix client error:', error);
-        });
+        // Create the client
+        const client = new MatrixClient(
+            config.homeserverUrl,
+            config.accessToken,
+            storage,
+            cryptoStore
+        );
+
+        // Optional: Auto-join rooms if you want similar behavior to syncing
+        AutojoinRoomsMixin.setupOnClient(client);
+
 
         try {
-            await new Promise((resolve, reject) => {
-                client.once('sync', (state) => {
-                    if (state === 'PREPARED') {
-                        console.log('Matrix client is prepared and ready to use.');
-                        resolve();
-                    }
-                });
-
-                client.once('error', reject);
-                client.startClient({
-                    lazyLoadMembers: true,
-                });
-            });
+            // Start syncing
+            await client.start();
+            console.log("Matrix bot client is ready and syncing.");
         } catch (error) {
-            console.error('Failed to initialize Matrix client:', error);
-            throw new Error('Client initialization failed');
+            console.error("Failed to initialize Matrix bot client:", error);
+            throw new Error("Client initialization failed");
         }
 
         return client;
@@ -126,6 +130,7 @@ export class MatrixDaemon {
                         });
 
                         return; // prevent double response
+
                     } else {
                         // Normal atomic commands
                         result = await this.commands[data.action](data.params);

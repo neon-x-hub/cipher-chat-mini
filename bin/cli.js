@@ -1,9 +1,9 @@
-// bin/cli.js
+#!/usr/bin/env node
+
 const { Command } = require('commander');
 const program = new Command();
 const initTUI = require('../src/tui/chat');
-
-
+const SimpleTimeParse = require('../src/utils/simple-time-parse.js');
 // Authentication commands
 const auth = new Command('auth')
     .description('Authentication commands');
@@ -26,18 +26,28 @@ auth.command('login')
         }
     });
 
+
+auth.command('signup')
+    .description('Sign up for a new account')
+    .action(async () => {
+        console.log('Starting signup process...');
+        // Dynamically import the signup.mjs
+        const { interactiveSignup } = await import('../src/cli/auth/signup.mjs');
+
+        try {
+            await interactiveSignup();
+            console.log('✅ Signup successful!');
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Signup failed:', error.message);
+            process.exit(1);
+        }
+    });
+
 auth.command('logout')
     .description('Clear session')
     .action(() => {
         console.log('Logging out...');
-        // pseudo: clearSession();
-    });
-
-auth.command('signup')
-    .description('Register new account')
-    .action(() => {
-        console.log('Starting account registration...');
-        // pseudo: registerNewAccount();
     });
 
 // Room management commands
@@ -97,6 +107,7 @@ room.command('create')
     .description('Create a new Matrix room')
     .requiredOption('-n, --name <name>', 'Name for the new room')
     .option('-p, --public', 'Make room public (default: private)', false)
+    .option('-e, --encrypted', 'Make room E2E encrypted (default: false)', false)
     .option('-t, --topic <topic>', 'Room topic/description', '')
     .action(async (opts) => {
         try {
@@ -105,13 +116,30 @@ room.command('create')
             // Dynamically import the createRoom function
             const { createRoom } = await import('../src/cli/room/create.mjs');
 
-            const roomId = await createRoom(
-                opts.name,
-                !opts.public, // isPrivate (inverted from --public flag)
-                opts.topic
-            );
+            const options = {
+                name: opts.name,
+                topic: opts.topic,
+                public: opts.public,
+                encrypted: opts.encrypted,
+            };
+
+            console.log("======");
+
+            console.log("Creating room with options: ");
+            console.log("Name:", options.name);
+            console.log("Topic:", options.topic);
+            console.log("Public:", options.public);
+            console.log("Encrypted:", options.encrypted);
+
+            console.log("======");
+
+
+
+            const roomId = await createRoom(options);
 
             console.log(`✅ Success! Room created with ID:\n${roomId}`);
+            process.exit(0);
+
         } catch (error) {
             console.error('❌ Room creation failed:', error.message);
             process.exit(1);
@@ -134,7 +162,52 @@ room.command('list')
                 membership = null;
             }
 
+            const startTime = Date.now();
+
             await listRooms({ membership });
+
+            console.log(`Done in ${Date.now() - startTime}ms`);
+
+            process.exit(0);
+        } catch (err) {
+            console.error('Error:', err.message);
+            process.exit(1);
+        }
+    });
+
+room.command('messages <roomId>')
+    .description('Fetch messages from a room within a time range')
+    .option('-s, --start <date>', 'Start date (ISO format or relative like 7d, 24h)', '7d')
+    .option('-e, --end <date>', 'End date (ISO format or relative like now, 1h)', 'now')
+    .option('-l, --limit <number>', 'Maximum number of messages to fetch', 100)
+    .option('-d, --direction <dir>', 'Pagination direction (b for backward, f for forward)', 'b')
+    .action(async (roomId, options) => {
+        console.log(`Fetching messages from room ${roomId}`);
+        console.log(`Time range: ${options.start} to ${options.end}`);
+
+        const { getMessagesInTimeRange } = await import('../src/cli/chat/get.mjs');
+
+        try {
+            const startTime = Date.now();
+
+            const startDate = SimpleTimeParse(options.start);
+            const endDate = SimpleTimeParse(options.end);
+
+            console.log(`Fetching messages from ${startDate.toISOString()} to ${endDate.toISOString()} ...`);
+
+
+            await getMessagesInTimeRange(
+                { roomId },
+                startDate,
+                endDate,
+                {
+                    limit: parseInt(options.limit),
+                    direction: options.direction
+                },
+                true // Enable logging
+            );
+
+            console.log(`Done in ${Date.now() - startTime}ms`);
             process.exit(0);
         } catch (err) {
             console.error('Error:', err.message);
@@ -237,8 +310,9 @@ program.addCommand(auth);
 program.addCommand(room);
 program.addCommand(daemon);
 program
+    .name('cich')
     .version('1.0.0')
-    .description('Matrix CLI Tool')
+    .description('Minimal, Aeasthetic CLI for Matrix.')
     .option('-d, --debug', 'Enable debug mode', false)
     .option('-v, --verbose', 'Enable verbose output', false);
 

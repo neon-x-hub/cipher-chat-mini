@@ -1,20 +1,26 @@
-import * as sdk from 'matrix-js-sdk';
 import { MatrixCommands } from './commands.mjs';
-import { daemonClient, DaemonClient } from '../daemon/client.mjs';
 import config from '../state/config.js';
 
-import { logger as Logger } from 'matrix-js-sdk/lib/logger.js';
-Logger.setLevel(Logger.levels.SILENT); // No more logs!
+// Matrix client
+import {
+    MatrixClient,
+    SimpleFsStorageProvider,
+    RustSdkCryptoStorageProvider,
+    AutojoinRoomsMixin,
+    LogService
+} from 'matrix-bot-sdk';
 
+// Daemon client
+import { daemonClient, DaemonClient } from '../daemon/client.mjs';
 
 /**
  * * MatrixClientProxy class to handle direct and daemon commands.
- * * * @class MatrixClientProxy
- * * @description This class acts as a proxy to either the direct Matrix client or the daemon client based on the configuration.
- * * * @property {MatrixCommands} directCommands - Instance of the MatrixCommands class for direct commands.
- * * @property {string} mode - The mode of operation, either 'daemon' or 'direct'.
- * * * @method getCommands - Returns the appropriate commands instance based on the mode.
- * * @method execute - Executes a command based on the action and parameters provided.
+ * @class MatrixClientProxy
+ * @description This class acts as a proxy to either the direct Matrix client or the daemon client based on the configuration.
+ * @property {MatrixCommands} directCommands - Instance of the MatrixCommands class for direct commands.
+ * @property {string} mode - The mode of operation, either 'daemon' or 'direct'.
+ * @method getCommands - Returns the appropriate commands instance based on the mode.
+ * @method execute - Executes a command based on the action and parameters provided.
  */
 export class MatrixClientProxy {
     constructor() {
@@ -27,7 +33,7 @@ export class MatrixClientProxy {
      *
      * @async
      * @private
-     * @returns {Promise<sdk.MatrixClient>} - A promise that resolves with the initialized Matrix client instance.
+     * @returns {Promise<MatrixClient>} - A promise that resolves with the initialized Matrix client instance.
      * @throws {Error} - Throws an error if the client fails to initialize.
      *
      * @description
@@ -35,42 +41,34 @@ export class MatrixClientProxy {
      * It sets up an error handler for client errors and starts the client with lazy loading of members.
      * The client is considered initialized when it reaches the 'PREPARED' sync state.
      */
-
     async _createDirectClient() {
-        const client = sdk.createClient({
-            baseUrl: config.homeserverUrl,
-            userId: config.userId,
-            accessToken: config.accessToken,
-            deviceId: config.deviceId,
-            timelineSupport: true,
-        });
+        const storage = new SimpleFsStorageProvider('storage.json');
+        const cryptoStore = new RustSdkCryptoStorageProvider('crypto_store');
 
-        client.on('error', (error) => {
-            console.error('Matrix client error:', error);
-        });
+        // Create the client
+        const client = new MatrixClient(
+            config.homeserverUrl,
+            config.accessToken,
+            storage,
+            cryptoStore
+        );
+
+        // Optional: Auto-join rooms if you want similar behavior to syncing
+        AutojoinRoomsMixin.setupOnClient(client);
+
 
         try {
-            await new Promise((resolve, reject) => {
-                client.once('sync', (state) => {
-                    if (state === 'PREPARED') {
-                        console.log("Direct client is prepared and ready to use.");
-
-                        resolve();
-                    }
-                });
-
-                client.once('error', reject);
-                client.startClient({
-                    lazyLoadMembers: true,
-                });
-            });
+            // Start syncing
+            await client.start();
+            console.log("Matrix bot client is ready and syncing.");
         } catch (error) {
-            console.error('Failed to initialize Matrix client:', error);
-            throw new Error('Client initialization failed');
+            console.error("Failed to initialize Matrix bot client:", error);
+            throw new Error("Client initialization failed");
         }
 
         return client;
     }
+
 
 
     /**
