@@ -1,7 +1,3 @@
-Got it — that’s a solid foundation for a clean, minimalistic Matrix CLI client! Below is your detailed and professional-looking README file, styled as you’d see in well-maintained open-source projects.
-
----
-
 # CipherChat
 
 Minimalistic & Aesthetic CLI Client for Matrix Servers
