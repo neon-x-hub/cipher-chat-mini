@@ -1,7 +1,4 @@
-import * as sdk from "matrix-js-sdk";
-import { logger as Logger } from 'matrix-js-sdk/lib/logger.js';
-Logger.setLevel(Logger.levels.SILENT);
-
+import { MatrixClient, MatrixAuth } from "matrix-bot-sdk";
 import readline from "readline";
 import fs from "fs/promises";
 import path from "path";
@@ -27,23 +24,19 @@ async function promptCredentials() {
 }
 
 async function login({ homeserverUrl, username, password }) {
-    const client = sdk.createClient({ baseUrl: homeserverUrl });
+    // Create MatrixAuth instance
+    const auth = new MatrixAuth(homeserverUrl);
 
     try {
-        const { access_token, user_id, device_id } = await client.login("m.login.password", {
-            user: username,
-            password,
-        });
+        // Perform the login with the provided credentials
+        const { accessToken, userId, deviceId } = await auth.passwordLogin(username, password);
 
         console.log("\n✅ Login successful!");
-        console.log("User ID:", user_id);
-        console.log("Access Token:", access_token);
-
-        client.setAccessToken(access_token);
+        console.log("User ID:", userId);
+        console.log("Access Token:", accessToken);
 
         return {
-            client,
-            credentials: { homeserverUrl, userId: user_id, accessToken: access_token, deviceId: device_id, useDaemon: true }
+            credentials: { homeserverUrl, userId: userId, accessToken: accessToken, deviceId: deviceId, useDaemon: true }
         };
     } catch (error) {
         console.error("\n❌ Login failed:", error.message);
@@ -65,7 +58,7 @@ async function saveCredentialsToConfig(credentials) {
  */
 export async function interactiveLogin() {
     const credentials = await promptCredentials();
-    const { client, credentials: savedCredentials } = await login(credentials);
+    const { credentials: savedCredentials } = await login(credentials);
 
     await saveCredentialsToConfig(savedCredentials);
 

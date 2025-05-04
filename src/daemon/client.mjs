@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,8 +66,7 @@ export class DaemonClient {
                     if (err.code === 'ENOENT') {
                         console.log('💤 Daemon not running. Starting daemon...');
                         await this.startDaemonProcess();
-
-                        // Retry connection after small delay
+                        // Retry connection after a short delay
                         setTimeout(() => {
                             this.connect().then(resolve).catch(reject);
                         }, 800);
@@ -101,12 +101,15 @@ export class DaemonClient {
      * @returns {Promise<void>} - A promise that resolves when the daemon process has been started.
      */
     async startDaemonProcess() {
-
         const runnerPath = path.resolve(__dirname, './start-daemon-runner.mjs');
+
+        // Open log file streams
+        const out = fs.openSync(path.resolve(__dirname, 'daemon-out.log'), 'a');
+        const err = fs.openSync(path.resolve(__dirname, 'daemon-err.log'), 'a');
 
         const child = spawn(process.execPath, [runnerPath], {
             detached: true,
-            stdio: 'ignore', // Don't tie up parent's stdio
+            stdio: ['ignore', out, err], // stdin ignored, stdout and stderr go to files
         });
 
         child.unref(); // Allow parent to exit independently
@@ -181,7 +184,8 @@ export class DaemonClient {
      * @returns {Promise<Object>} - A promise that resolves with the response data or rejects with an error.
      */
     async sendCommand(action, params = {}) {
-        await this.connect(); // works properly
+        await this.connect();
+
 
         return new Promise((resolve, reject) => {
             const requestId = randomUUID();
@@ -190,6 +194,7 @@ export class DaemonClient {
             let resolved = false;
 
             const handler = (response) => {
+
                 if (!response || response.requestId !== requestId) return;
 
                 if (response.success) {

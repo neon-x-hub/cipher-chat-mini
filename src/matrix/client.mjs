@@ -5,6 +5,7 @@ import config from '../state/config.js';
 import {
     MatrixClient,
     SimpleFsStorageProvider,
+    RustSdkCryptoStorageProvider,
     AutojoinRoomsMixin,
     LogService
 } from 'matrix-bot-sdk';
@@ -41,18 +42,20 @@ export class MatrixClientProxy {
      * The client is considered initialized when it reaches the 'PREPARED' sync state.
      */
     async _createDirectClient() {
-        // Initialize storage provider for syncing state
-        const storage = new SimpleFsStorageProvider("../state/storage.json");
+        const storage = new SimpleFsStorageProvider('storage.json');
+        const cryptoStore = new RustSdkCryptoStorageProvider('crypto_store');
 
         // Create the client
         const client = new MatrixClient(
             config.homeserverUrl,
             config.accessToken,
-            storage
+            storage,
+            cryptoStore
         );
 
         // Optional: Auto-join rooms if you want similar behavior to syncing
         AutojoinRoomsMixin.setupOnClient(client);
+
 
         try {
             // Start syncing

@@ -1,3 +1,5 @@
+import fs from 'fs'
+import path from 'path'
 import IPC from 'node-ipc';
 import config from '../state/config.js';
 import { MatrixCommands } from '../matrix/commands.mjs';
@@ -6,8 +8,14 @@ import {
     MatrixClient,
     SimpleFsStorageProvider,
     AutojoinRoomsMixin,
-    LogService
+    LogService,
+    LogLevel,
+    RustSdkCryptoStorageProvider
 } from 'matrix-bot-sdk';
+
+LogService.setLevel(LogLevel.INFO); // Set to 'silent' to suppress logs
+
+
 /**
  * * MatrixDaemon class to handle IPC communication and Matrix commands.
  * * @class MatrixDaemon
@@ -35,14 +43,15 @@ export class MatrixDaemon {
      * state is 'PREPARED'. If the client initialization fails, it throws an error.
      */
     async _createClient() {
-        // Initialize storage provider for syncing state
-        const storage = new SimpleFsStorageProvider("../state/storage.json");
+        const storage = new SimpleFsStorageProvider('storage.json');
+        const cryptoStore = new RustSdkCryptoStorageProvider('crypto_store');
 
         // Create the client
         const client = new MatrixClient(
             config.homeserverUrl,
             config.accessToken,
-            storage
+            storage,
+            cryptoStore
         );
 
         // Optional: Auto-join rooms if you want similar behavior to syncing
@@ -121,6 +130,7 @@ export class MatrixDaemon {
                         });
 
                         return; // prevent double response
+
                     } else {
                         // Normal atomic commands
                         result = await this.commands[data.action](data.params);
