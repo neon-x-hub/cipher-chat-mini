@@ -1,6 +1,7 @@
 // Matrix client
 import {
     MatrixClient,
+    MatrixAuth
 } from 'matrix-bot-sdk';
 /**
  * MatrixCommands class to handle Matrix operations.
@@ -23,38 +24,31 @@ export class MatrixCommands {
     ==================================================================
     */
 
-    /**
-     * Logs into the Matrix client using the specified strategy and credentials.
-     *
-     * @deprecated
-     * @async
-     * @param {Object} params - The login parameters.
-     * @param {string} params.strategy - The authentication strategy to use (e.g., "m.login.password").
-     * @param {Object} params.credentials - The credentials required for the selected strategy.
-     * @returns {Promise<Object>} - A promise that resolves with the login response.
-     */
-    async login(params) {
-        switch (params.strategy) {
-            case "m.login.password":
-                // Login using username and password with matrix-bot-sdk
-                await this.client.loginWithPassword(params.credentials.username, params.credentials.password);
-                break;
+    static async login({ homeserverUrl, username, password }) {
 
-            case "m.login.token":
-                // Login using an access token (if available)
-                await this.client.loginWithAccessToken(params.credentials.token);
-                break;
+        const auth = new MatrixAuth(homeserverUrl);
 
-            // Add additional strategies here if needed, like m.login.oauth2 or others
-            default:
-                throw new Error(`Unsupported login strategy: ${params.strategy}`);
+        const { accessToken, userId, deviceId } = await auth.passwordLogin(username, password);
+
+        return {
+            accessToken,
+            userId,
+            deviceId
         }
-
-        // Return the client instance once logged in
-        return this.client;
     }
 
+    static async register({ homeserverUrl, username, password }) {
 
+        const auth = new MatrixAuth(homeserverUrl);
+
+        const { accessToken, userId, deviceId } = await auth.passwordRegister(username, password);
+
+        return {
+            accessToken,
+            userId,
+            deviceId
+        }
+    }
 
     /*
     ==================================================================
