@@ -11,7 +11,7 @@ import {
 export class MatrixCommands {
     /**
      * Constructs a new MatrixCommands instance with the given client.
-     * @param {sdk.MatrixClient} client - The Matrix client instance used to interact with the Matrix server.
+     * @param {MatrixClient} client - The Matrix client instance used to interact with the Matrix server.
      */
     constructor(client) {
         this.client = client;
@@ -32,9 +32,25 @@ export class MatrixCommands {
      * @param {Object} params.credentials - The credentials required for the selected strategy.
      * @returns {Promise<Object>} - A promise that resolves with the login response.
      */
-
     async login(params) {
-        return this.client.login(params.strategy, params.credentials);
+        switch (params.strategy) {
+            case "m.login.password":
+                // Login using username and password with matrix-bot-sdk
+                await this.client.loginWithPassword(params.credentials.username, params.credentials.password);
+                break;
+
+            case "m.login.token":
+                // Login using an access token (if available)
+                await this.client.loginWithAccessToken(params.credentials.token);
+                break;
+
+            // Add additional strategies here if needed, like m.login.oauth2 or others
+            default:
+                throw new Error(`Unsupported login strategy: ${params.strategy}`);
+        }
+
+        // Return the client instance once logged in
+        return this.client;
     }
 
 
@@ -47,75 +63,108 @@ export class MatrixCommands {
 
 
     /**
-     * Lists Matrix rooms with optional filtering by membership.
-     *
-     * @async
-     * @param {Object} [options] - Filtering options.
-     * @param {string} [options.membership] - Membership filter: "join", "invite", "leave", or null for all.
-     * @returns {Promise<Array>} - A promise that resolves to the list of rooms.
-     */
+  * Lists Matrix rooms with optional filtering by membership.
+  *
+  * @async
+  * @param {Object} [options] - Filtering options.
+  * @param {string} [options.membership] - Membership filter: "join", "invite", "leave", or null for all.
+  * @returns {Promise<Array>} - A promise that resolves to the list of rooms.
+  */
     async listRooms(options = {}) {
         const { membership = "join" } = options;
+
+        const getRoomName = async (roomId) => {
+            try {
+                const nameEvent = await this.client.getRoomStateEvent(roomId, "m.room.name", "");
+                return nameEvent?.name || "Unnamed Room";
+            } catch {
+                return "Unnamed Room";
+            }
+        };
+
+        const getMemberCount = async (roomId) => {
+            try {
+                const members = await this.client.getJoinedRoomMembers(roomId);
+                return members.length;
+            } catch {
+                return 0;
+            }
+        };
+
+        const getLastMessageInfo = async (roomId) => {
+            try {
+                // Get the stored sync token
+                const token = await this.client.storageProvider.getSyncToken();
+
+                if (!token) {
+                    throw new Error("No sync token available. Sync at least once first.");
+                }
+
+                // Call /messages to get the last message
+                const messages = await this.client.doRequest(
+                    "GET",
+                    `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages`,
+                    {
+                        from: token,
+                        dir: "b", // backward to get latest messages
+                        limit: 1,
+                    }
+                );
+
+                if (messages.chunk && messages.chunk.length > 0) {
+                    const lastEvent = messages.chunk[0];
+                    return {
+                        lastEventTime: new Date(lastEvent.origin_server_ts),
+                        lastMessage: lastEvent.content?.body || "Non-text message",
+                    };
+                }
+            } catch (err) {
+                console.error("Failed to get last message:", err);
+            }
+            return {
+                lastEventTime: null,
+                lastMessage: "No messages yet",
+            };
+        };
+
 
         let roomIds = [];
 
         if (!membership || membership === "join") {
             roomIds = await this.client.getJoinedRooms();
-        } else if (membership === "invite") {
-            // For invites, fetch the sync state
-            const sync = await this.client.getSyncState();
-            roomIds = Object.keys(sync.rooms?.invite || {});
-        } else if (membership === "leave") {
-            // Similarly for left rooms
-            const sync = await this.client.getSyncState();
-            roomIds = Object.keys(sync.rooms?.leave || {});
+        } else if (membership === "invite" || membership === "leave") {
+            try {
+                // Get all rooms the user is part of via /sync
+                const sync = await this.client.doRequest("GET", "/_matrix/client/v3/sync", {
+                    timeout: 30000 // optional timeout
+                });
+
+                // Based on the sync response, get rooms in the requested membership state
+                const roomsInState = sync.rooms[membership];
+                roomIds = Object.keys(roomsInState || {});
+
+            } catch (err) {
+                console.error(`Failed to get rooms for membership ${membership}:`, err);
+                throw new Error(`Failed to get rooms for membership ${membership}`);
+            }
         } else {
-            // Invalid membership filter
             throw new Error(`Unknown membership filter: ${membership}`);
         }
 
         const rooms = [];
 
         for (const roomId of roomIds) {
-            let roomName = "Unnamed Room";
-            let memberCount = 0;
-            let lastEvent = null;
-            let lastMessage = "No messages yet";
-
-            try {
-                // Try to get the room name (from state event)
-                const nameEvent = await this.client.getRoomStateEvent(roomId, "m.room.name", "");
-                if (nameEvent?.name) {
-                    roomName = nameEvent.name;
-                }
-            } catch (e) {
-                // If no name event, skip error
-            }
-
-            try {
-                // Get member count
-                const members = await this.client.getJoinedRoomMembers(roomId);
-                memberCount = members.length;
-            } catch (e) {
-                // Skip if failed
-            }
-
-            try {
-                // Get latest messages (fetch most recent messages)
-                const messages = await this.client.getMessages(roomId, undefined, 10, "b"); // Getting the last 10 messages
-                if (messages.chunk && messages.chunk.length > 0) {
-                    lastEvent = messages.chunk[0];
-                    lastMessage = lastEvent.content?.body || "Non-text message";
-                }
-            } catch (e) {
-                // Skip if no messages or error fetching
-            }
+            const [roomName, memberCount, { lastEventTime, lastMessage }] = await Promise.all([
+                getRoomName(roomId),
+                getMemberCount(roomId),
+                getLastMessageInfo(roomId)
+            ]);
 
             rooms.push({
                 roomId,
                 roomName,
                 memberCount,
-                lastEvent: lastEvent?.origin_server_ts ? new Date(lastEvent.origin_server_ts) : null,
+                lastEvent: lastEventTime,
                 lastMessage
             });
         }
@@ -124,16 +173,17 @@ export class MatrixCommands {
     }
 
 
+
     /**
      * Creates a new room with the specified parameters.
      *
      * @async
-     * @param {sdk.ICreateRoomOpts} params - The parameters for room creation.
+     * @param {RoomCreateOptions} params - The parameters for room creation.
      * @returns {Promise<{roomId: string}>} - A promise that resolves with the created room's details.
      */
-
     async createRoom(params) {
-        return await this.client.createRoom(params);
+        const roomId = await this.client.createRoom(params);
+        return { roomId };
     }
 
     /**
@@ -206,7 +256,7 @@ export class MatrixCommands {
      * @throws Will throw an error if the operation fails.
      */
     async leaveRoom(params) {
-        return await this.client.leave(params.roomId);
+        return await this.client.leaveRoom(params.roomId);
     }
 
 
@@ -218,18 +268,19 @@ export class MatrixCommands {
     */
 
 
+
     /**
-     * Sends a message to a specified room.
+     * Sends a message to the specified Matrix room.
      *
      * @async
-     * @param {{room: sdk.Room, message: {type: string, body: string}}} params - The parameters for sending the message.
-     * @param {sdk.Room} params.room - The room object to send the message to.
-     * @param {Object} params.message - The message details.
-     * @param {string} [params.message.type="m.text"] - The message type (default: "m.text").
-     * @param {string} params.message.body - The content of the message.
-     * @returns {Promise<sdk.ISendEventResponse>} - A promise that resolves with the event ID of the sent message.
+     * @param {Object} params - The parameters for sending the message.
+     * @param {Object} params.room - The room object containing the ID.
+     * @param {Object} params.message - The message object containing the body and optionally the type.
+     * @param {string} [params.message.type=m.text] - The message type (e.g., m.text, m.notice, m.emote, m.file, etc.).
+     * @param {string} params.message.body - The message body.
+     * @returns {Promise} - A promise that resolves when the message has been successfully sent.
+     * @throws Will throw an error if the operation fails.
      */
-
     async sendMessage(params) {
         return await this.client.sendMessage(params.room.roomId, {
             msgtype: params.message.type || "m.text",
@@ -238,38 +289,140 @@ export class MatrixCommands {
     }
 
 
+
+    /**
+     * Streams messages from a specified Matrix room. The callback provided will
+     * be called for each message received in the room.
+     *
+     * @async
+     * @param {Object} params - The parameters for streaming messages.
+     * @param {Object} params.room - The room object containing the ID.
+     * @param {Function} params.callback - The callback function to call for each message.
+     * @returns {Function} - A cleanup function to call when you want to stop streaming.
+     * @throws Will throw an error if the operation fails.
+     */
     async streamMessages(params) {
+        const handler = async (roomId, event) => {
+            if (roomId !== params.room.roomId) return;
+            if (event['type'] !== 'm.room.message') return;
 
-        const room = this.client.getRoom(params.room.roomId);
+            const content = event['content'];
+            const sender = event['sender'];
 
-        if (!room) {
-            throw new Error(`Room with ID ${params.room.roomId} not found`);
-        }
+            params.callback({
+                roomId,
+                sender,
+                body: content.body,
+            });
+        };
 
-        return new Promise((resolve, reject) => {
-            const onMessage = (event) => {
-                if (event.getType() === 'm.room.message') {
-                    // callback with the message event
-                    const messageContent = event.getContent();
-                    const sender = event.getSender();
+        this.client.on('room.event', handler);
 
-                    params.callback({
-                        roomId: room.roomId,
-                        sender,
-                        body: messageContent.body,
-                    });
-
-                }
-            };
-
-            room.on('Room.timeline', onMessage);
-
-            // Cleanup function to remove the listener
-            return () => {
-                room.off('Room.timeline', onMessage);
-            };
-
-        });
+        // Return cleanup function
+        return () => {
+            this.client.removeListener('room.event', handler);
+        };
     }
 
+
+    /**
+    * Fetches messages from a room within a specific time range
+    *
+    * @async
+    * @param {string} roomId - The ID of the room to fetch messages from
+    * @param {Date} startDate - The start of the time range
+    * @param {Date} endDate - The end of the time range
+    * @param {Object} [options] - Additional options
+    * @param {number} [options.limit=100] - Maximum number of messages to return
+    * @param {string} [options.direction='b'] - Direction to paginate ('b' for backward, 'f' for forward)
+    * @returns {Promise<Array<{event: object, timestamp: Date}>>} - Array of message events with timestamps
+    */
+    async getMessages({roomId, startDate, endDate, options = {}}) {
+        const { limit = 100, direction = 'b' } = options;
+        const messages = [];
+        let hasMore = true;
+        let fromToken = null;
+
+        const startTime = startDate;
+        const endTime = endDate;
+
+        try {
+            // Get initial sync token as the starting point
+            fromToken = await this.client.storageProvider.getSyncToken();
+            if (!fromToken) {
+                throw new Error("No sync token available. Sync at least once first.");
+            }
+
+            while (messages.length < limit && hasMore) {
+                // Fetch messages using raw doRequest
+                const response = await this.client.doRequest(
+                    "GET",
+                    `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages`,
+                    {
+                        from: fromToken,
+                        dir: direction,
+                        limit: 100, // always fetch in pages of 100 for efficiency
+                    }
+                );
+
+                if (!response.chunk || response.chunk.length === 0) {
+                    hasMore = false;
+                    break;
+                }
+
+                for (const event of response.chunk) {
+                    const eventTime = event.origin_server_ts;
+
+                    // Skip events outside time range
+                    if (eventTime < startTime) {
+                        if (direction === 'b') {
+                            hasMore = false;
+                            break;
+                        }
+                        continue;
+                    }
+
+                    if (eventTime > endTime) {
+                        if (direction === 'f') {
+                            hasMore = false;
+                            break;
+                        }
+                        continue;
+                    }
+
+                    // Only include m.room.message events
+                    if (event.type === 'm.room.message') {
+                        messages.push({
+                            event,
+                            timestamp: new Date(eventTime)
+                        });
+                    }
+
+                    // Stop if we hit limit
+                    if (messages.length >= limit) {
+                        hasMore = false;
+                        break;
+                    }
+                }
+
+                // Update pagination token
+                fromToken = response.end || null;
+
+                // Stop if no further pagination token
+                if (!fromToken) {
+                    hasMore = false;
+                }
+            }
+
+            // Reverse if direction was backward, to get chronological order
+            if (direction === 'b') {
+                messages.reverse();
+            }
+
+            return messages;
+        } catch (error) {
+            console.error(`Error fetching messages for room ${roomId}:`, error);
+            throw error;
+        }
+    }
 }
