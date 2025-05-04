@@ -26,6 +26,7 @@ export class MatrixCommands {
     /**
      * Logs into the Matrix client using the specified strategy and credentials.
      *
+     * @deprecated
      * @async
      * @param {Object} params - The login parameters.
      * @param {string} params.strategy - The authentication strategy to use (e.g., "m.login.password").
@@ -93,20 +94,18 @@ export class MatrixCommands {
 
         const getLastMessageInfo = async (roomId) => {
             try {
-                // Get the stored sync token
                 const token = await this.client.storageProvider.getSyncToken();
 
                 if (!token) {
                     throw new Error("No sync token available. Sync at least once first.");
                 }
 
-                // Call /messages to get the last message
                 const messages = await this.client.doRequest(
                     "GET",
                     `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages`,
                     {
                         from: token,
-                        dir: "b", // backward to get latest messages
+                        dir: "b",
                         limit: 1,
                     }
                 );
@@ -115,7 +114,7 @@ export class MatrixCommands {
                     const lastEvent = messages.chunk[0];
                     return {
                         lastEventTime: new Date(lastEvent.origin_server_ts),
-                        lastMessage: lastEvent.content?.body || "Non-text message",
+                        lastMessage: lastEvent.content?.body || "None",
                     };
                 }
             } catch (err) {
@@ -134,12 +133,10 @@ export class MatrixCommands {
             roomIds = await this.client.getJoinedRooms();
         } else if (membership === "invite" || membership === "leave") {
             try {
-                // Get all rooms the user is part of via /sync
                 const sync = await this.client.doRequest("GET", "/_matrix/client/v3/sync", {
-                    timeout: 30000 // optional timeout
+                    timeout: 30000
                 });
 
-                // Based on the sync response, get rooms in the requested membership state
                 const roomsInState = sync.rooms[membership];
                 roomIds = Object.keys(roomsInState || {});
 
@@ -196,17 +193,14 @@ export class MatrixCommands {
     async joinRoom(params) {
         const { roomId } = params;
 
-        // Join the room
         await this.client.joinRoom(roomId);
 
         let roomName = "Unnamed Room";
         let canonicalAlias = "None";
         let memberCount = 0;
-        let roomType = "Regular chat"; // Default room type (could be specialized in the future)
+        let roomType = "Regular chat";
 
-        // Fetch room state details
         try {
-            // Fetch the room name (m.room.name)
             const nameEvent = await this.client.getRoomStateEvent(roomId, "m.room.name", "");
             if (nameEvent?.name) {
                 roomName = nameEvent.name;
@@ -216,7 +210,6 @@ export class MatrixCommands {
         }
 
         try {
-            // Fetch the canonical alias (m.room.canonical_alias)
             const aliasEvent = await this.client.getRoomStateEvent(roomId, "m.room.canonical_alias", "");
             if (aliasEvent?.alias) {
                 canonicalAlias = aliasEvent.alias;
@@ -226,15 +219,11 @@ export class MatrixCommands {
         }
 
         try {
-            // Get the member count (list of joined members)
             const members = await this.client.getJoinedRoomMembers(roomId);
             memberCount = members.length;
         } catch (error) {
             console.error("Error fetching room members:", error);
         }
-
-        // You can define `roomType` here, depending on your application's room type categorization (e.g., "DM" for direct messages).
-        // For now, it defaults to "Regular chat".
 
         return {
             roomId,
@@ -318,7 +307,6 @@ export class MatrixCommands {
 
         this.client.on('room.event', handler);
 
-        // Return cleanup function
         return () => {
             this.client.removeListener('room.event', handler);
         };
@@ -337,7 +325,7 @@ export class MatrixCommands {
     * @param {string} [options.direction='b'] - Direction to paginate ('b' for backward, 'f' for forward)
     * @returns {Promise<Array<{event: object, timestamp: Date}>>} - Array of message events with timestamps
     */
-    async getMessages({roomId, startDate, endDate, options = {}}) {
+    async getMessages({ roomId, startDate, endDate, options = {} }) {
         const { limit = 100, direction = 'b' } = options;
         const messages = [];
         let hasMore = true;
@@ -347,21 +335,19 @@ export class MatrixCommands {
         const endTime = endDate;
 
         try {
-            // Get initial sync token as the starting point
             fromToken = await this.client.storageProvider.getSyncToken();
             if (!fromToken) {
                 throw new Error("No sync token available. Sync at least once first.");
             }
 
             while (messages.length < limit && hasMore) {
-                // Fetch messages using raw doRequest
                 const response = await this.client.doRequest(
                     "GET",
                     `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages`,
                     {
                         from: fromToken,
                         dir: direction,
-                        limit: 100, // always fetch in pages of 100 for efficiency
+                        limit: 100,
                     }
                 );
 
@@ -373,7 +359,6 @@ export class MatrixCommands {
                 for (const event of response.chunk) {
                     const eventTime = event.origin_server_ts;
 
-                    // Skip events outside time range
                     if (eventTime < startTime) {
                         if (direction === 'b') {
                             hasMore = false;
@@ -390,7 +375,6 @@ export class MatrixCommands {
                         continue;
                     }
 
-                    // Only include m.room.message events
                     if (event.type === 'm.room.message') {
                         messages.push({
                             event,
@@ -398,23 +382,19 @@ export class MatrixCommands {
                         });
                     }
 
-                    // Stop if we hit limit
                     if (messages.length >= limit) {
                         hasMore = false;
                         break;
                     }
                 }
 
-                // Update pagination token
                 fromToken = response.end || null;
 
-                // Stop if no further pagination token
                 if (!fromToken) {
                     hasMore = false;
                 }
             }
 
-            // Reverse if direction was backward, to get chronological order
             if (direction === 'b') {
                 messages.reverse();
             }
