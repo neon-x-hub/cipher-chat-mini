@@ -26,18 +26,28 @@ auth.command('login')
         }
     });
 
+
+auth.command('signup')
+    .description('Sign up for a new account')
+    .action(async () => {
+        console.log('Starting signup process...');
+        // Dynamically import the signup.mjs
+        const { interactiveSignup } = await import('../src/cli/auth/signup.mjs');
+
+        try {
+            await interactiveSignup();
+            console.log('✅ Signup successful!');
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Signup failed:', error.message);
+            process.exit(1);
+        }
+    });
+
 auth.command('logout')
     .description('Clear session')
     .action(() => {
         console.log('Logging out...');
-        // pseudo: clearSession();
-    });
-
-auth.command('signup')
-    .description('Register new account')
-    .action(() => {
-        console.log('Starting account registration...');
-        // pseudo: registerNewAccount();
     });
 
 // Room management commands
