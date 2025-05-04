@@ -62,3 +62,10 @@ test-results/
 
 # Matrix Config
 src/state/config.js
+
+
+# Crypto Store Folder
+crypto_store/
+
+# File system storage
+storage.json
