@@ -1,4 +1,4 @@
-# CipherChat
+# CipherChat - Mini
 
 Minimalistic & Aesthetic CLI Client for Matrix Servers
 *Built with Node.js • Low memory footprint • Future Rust port in progress*
