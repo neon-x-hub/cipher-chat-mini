@@ -1,4 +1,5 @@
-import { MatrixClient, MatrixAuth } from "matrix-bot-sdk";
+import { MatrixClient } from "matrix-bot-sdk";
+import { MatrixCommands } from "../../matrix/commands.mjs";
 import readline from "readline";
 import fs from "fs/promises";
 import path from "path";
@@ -24,12 +25,10 @@ async function promptCredentials() {
 }
 
 async function login({ homeserverUrl, username, password }) {
-    // Create MatrixAuth instance
-    const auth = new MatrixAuth(homeserverUrl);
 
     try {
         // Perform the login with the provided credentials
-        const { accessToken, userId, deviceId } = await auth.passwordLogin(username, password);
+        const { accessToken, userId, deviceId } = await MatrixCommands.login({ homeserverUrl, username, password });
 
         console.log("\n✅ Login successful!");
         console.log("User ID:", userId);
