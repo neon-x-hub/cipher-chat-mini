@@ -144,7 +144,7 @@ CipherChat is designed to maintain a **low memory footprint** even in the Node.j
 
 ---
 
-## Server ??
+## 🖥 Server ??
 Yes, I am hosting a matrix synapse server, well kinda...
 This is it if you are interested: `https://cich.mmmo.me`
 
