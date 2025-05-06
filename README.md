@@ -15,6 +15,7 @@ This is the **mini version** built with Node.js. A future full version is planne
 [![Node.js](https://img.shields.io/badge/Node.js-≥18.x-green)](https://nodejs.org/)
 [![Matrix](https://img.shields.io/badge/Matrix-Client-blueviolet)](https://matrix.org/)
 
+[vvv Video Overview vvv]
 [![cich CLI Demo](https://img.youtube.com/vi/RKfXgHqtfLk/maxresdefault.jpg)](https://youtu.be/RKfXgHqtfLk)
 
 ---
