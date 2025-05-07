@@ -175,6 +175,34 @@ room.command('list')
         }
     });
 
+room.command('invite')
+    .description('Invite a user to a room.')
+    .requiredOption('-r, --room-id <roomId>', 'ID of the room to invite the user to')
+    .requiredOption('-u, --user-id <userId>', 'ID of the user to invite (e.g., @user:server)')
+    .action(async (options) => {
+        console.log(`Inviting user ${options.userId} to room ${options.roomId}`);
+
+        const { inviteUser } = await import('../src/cli/room/invite.mjs');
+
+        try {
+            const startTime = Date.now();
+
+            const result = await inviteUser({
+                roomId: options.roomId,
+                userId: options.userId,
+            });
+
+            console.log('Invite result:', result);
+            console.log(`Done in ${Date.now() - startTime}ms`);
+
+            process.exit(0);
+        } catch (err) {
+            console.error('Error:', err.message);
+            process.exit(1);
+        }
+    });
+
+
 room.command('messages <roomId>')
     .description('Fetch messages from a room within a time range')
     .option('-s, --start <date>', 'Start date (ISO format or relative like 7d, 24h)', '7d')
