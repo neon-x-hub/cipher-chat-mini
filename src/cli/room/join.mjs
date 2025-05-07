@@ -1,5 +1,13 @@
 import { clientProxy } from "../../matrix/client.mjs";
 
+/**
+ * Joins a room by its ID.
+ *
+ * @async
+ * @param {{roomId: string}} params - The parameters for joining the room.
+ * @returns {Promise<{{roomId: string, roomName: string, canonicalAlias: string, memberCount: number, roomType: string}}>} - A promise that resolves with the joined room's details.
+ * @throws {Error} - Throws an error if the join fails.
+ */
 async function joinRoom(roomObj) {
     const client = clientProxy;
 
