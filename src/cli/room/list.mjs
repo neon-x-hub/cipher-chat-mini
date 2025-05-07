@@ -1,5 +1,14 @@
 import { clientProxy } from "../../matrix/client.mjs";
 
+/**
+* Lists Matrix rooms with optional filtering by membership.
+*
+* @async
+* @param {Object} [options] - Filtering options.
+* @param {string} [options.membership] - Membership filter: "join", "invite", "leave", or null for all.
+* @returns {Promise<Array>} - A promise that resolves to the list of rooms.
+* @throws {Error} - Throws an error if the listing fails.
+*/
 async function listRooms(options = {}) {
     const client = clientProxy;
 
