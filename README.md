@@ -53,8 +53,6 @@ npm i -g https://github.com/neon-x-hub/cipher-chat-mini.git
 cich [options] [command]
 ```
 
-Minimal, Aesthetic CLI for Matrix.
-
 ### Global Options
 
 | Option          | Description                            |
