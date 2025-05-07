@@ -243,6 +243,67 @@ export class MatrixCommands {
     }
 
 
+    /**
+ * Invites a user to a specified Matrix room and returns room metadata.
+ *
+ * @param {Object} params - Parameters for the invitation.
+ * @param {string} params.roomId - The ID of the room to invite the user to.
+ * @param {string} params.userId - The ID of the user to invite.
+ * @returns {Promise<Object>} An object containing room metadata and invite status.
+ */
+    async inviteUser(params) {
+        const { roomId, userId } = params;
+
+        try {
+            await this.client.inviteUser(userId, roomId);
+        } catch (error) {
+            console.error(`Error inviting user ${userId} to room ${roomId}:`, error);
+            throw error;
+        }
+
+        let roomName = "Unnamed Room";
+        let canonicalAlias = "None";
+        let memberCount = 0;
+        let roomType = "Regular chat";
+
+        try {
+            const nameEvent = await this.client.getRoomStateEvent(roomId, "m.room.name", "");
+            if (nameEvent && nameEvent.name) {
+                roomName = nameEvent.name;
+            }
+        } catch (error) {
+            console.error("Error fetching room name:", error);
+        }
+
+        try {
+            const aliasEvent = await this.client.getRoomStateEvent(roomId, "m.room.canonical_alias", "");
+            if (aliasEvent && aliasEvent.alias) {
+                canonicalAlias = aliasEvent.alias;
+            }
+        } catch (error) {
+            console.error("Error fetching room canonical alias:", error);
+        }
+
+        try {
+            const members = await this.client.getJoinedRoomMembers(roomId);
+            memberCount = members.length;
+        } catch (error) {
+            console.error("Error fetching room members:", error);
+        }
+
+        return {
+            roomId,
+            userId,
+            invited: true,
+            roomName,
+            canonicalAlias,
+            memberCount,
+            roomType,
+        };
+    }
+
+
+
 
     /*
     ==================================================================
